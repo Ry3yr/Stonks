@@ -1,0 +1,18 @@
+{
+    "CNP": {
+        "cyclic": "quarterly",
+        "volatile": "no"
+    },
+    "IFX": {
+        "cyclic": "quarterly"
+    },
+    "U8X0": {
+        "cyclic": "halfyearly"
+    },
+    "MAXXF": {
+        "volatile": "yes"
+    },
+    "KHC": {
+        "volatile": "neutral"
+    }
+}
