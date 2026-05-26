@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+  <title>Börsen Öffnungszeiten · Live Status</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background: linear-gradient(145deg, #f0f4fa 0%, #e6edf4 100%);
+      font-family: 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+      padding: 2rem 1rem;
+      color: #1a2c3e;
+    }
+
+    .container {
+      max-width: 1300px;
+      margin: 0 auto;
+    }
+
+    /* header */
+    .header {
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+
+    .header h1 {
+      font-size: 1.9rem;
+      font-weight: 600;
+      background: linear-gradient(135deg, #1e3c4c, #2b5c74);
+      background-clip: text;
+      -webkit-background-clip: text;
+      color: transparent;
+      letter-spacing: -0.3px;
+    }
+
+    .header .sub {
+      color: #2c5a74;
+      margin-top: 0.5rem;
+      font-weight: 500;
+      background: rgba(255,255,240,0.6);
+      display: inline-block;
+      padding: 0.2rem 1rem;
+      border-radius: 40px;
+      backdrop-filter: blur(2px);
+    }
+
+    .live-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: #1e2f3c;
+      color: white;
+      padding: 0.2rem 1rem;
+      border-radius: 60px;
+      font-size: 0.8rem;
+      margin-top: 0.8rem;
+    }
+
+    .pulse {
+      width: 10px;
+      height: 10px;
+      background-color: #2ef07c;
+      border-radius: 50%;
+      box-shadow: 0 0 5px #2ef07c;
+      animation: pulse-green 1.2s infinite;
+    }
+
+    @keyframes pulse-green {
+      0% { opacity: 0.4; transform: scale(0.8);}
+      100% { opacity: 1; transform: scale(1.2);}
+    }
+
+    /* cards grid */
+    .exchange-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 1.6rem;
+      margin-bottom: 2.5rem;
+    }
+
+    .card {
+      background: rgba(255, 255, 255, 0.94);
+      backdrop-filter: blur(0px);
+      border-radius: 2rem;
+      box-shadow: 0 12px 28px rgba(0, 10, 20, 0.12), 0 2px 4px rgba(0,0,0,0.02);
+      padding: 1.3rem 1.5rem 1.8rem;
+      transition: transform 0.2s ease, box-shadow 0.2s;
+      border: 1px solid rgba(255,255,245,0.7);
+    }
+
+    .card:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 22px 32px -12px rgba(0, 20, 40, 0.2);
+    }
+
+    .exchange-name {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      flex-wrap: wrap;
+      border-bottom: 2px solid #dce5ef;
+      padding-bottom: 0.65rem;
+      margin-bottom: 1.2rem;
+    }
+
+    .exchange-name h2 {
+      font-size: 1.55rem;
+      font-weight: 600;
+      letter-spacing: -0.2px;
+    }
+
+    .status {
+      font-weight: 700;
+      font-size: 0.85rem;
+      padding: 0.25rem 0.75rem;
+      border-radius: 50px;
+      background: #eef2f7;
+    }
+
+    .status.open {
+      background: #c8f0e1;
+      color: #006b4c;
+      box-shadow: inset 0 0 0 1px #9be0c8;
+    }
+
+    .status.closed {
+      background: #ffe1de;
+      color: #b13e3e;
+      box-shadow: inset 0 0 0 1px #fbc5be;
+    }
+
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      margin: 0.8rem 0;
+      font-size: 0.95rem;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+
+    .label {
+      font-weight: 600;
+      color: #2c5a6e;
+    }
+
+    .value {
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 500;
+      background: #f3f7fb;
+      padding: 0.2rem 0.6rem;
+      border-radius: 20px;
+    }
+
+    .next-event {
+      margin-top: 1rem;
+      background: #eef3fc;
+      border-radius: 1.2rem;
+      padding: 0.7rem 1rem;
+      font-size: 0.85rem;
+      border-left: 4px solid #2c8eb3;
+    }
+
+    .footnote {
+      text-align: center;
+      margin-top: 2rem;
+      font-size: 0.75rem;
+      color: #4a627a;
+      background: #f8fafd;
+      max-width: 600px;
+      margin-left: auto;
+      margin-right: auto;
+      padding: 0.8rem;
+      border-radius: 2rem;
+    }
+
+    .refresh-note {
+      font-size: 0.7rem;
+      text-align: right;
+      margin-top: 0.2rem;
+      opacity: 0.7;
+    }
+
+    button {
+      background: #dce5f0;
+      border: none;
+      padding: 6px 14px;
+      border-radius: 30px;
+      font-weight: 500;
+      cursor: pointer;
+      margin-top: 1rem;
+      font-size: 0.75rem;
+      transition: 0.1s;
+    }
+
+    button:active {
+      background: #c0cee0;
+    }
+
+    @media (max-width: 680px) {
+      body { padding: 1rem; }
+      .exchange-name h2 { font-size: 1.3rem; }
+      .info-row { flex-direction: column; gap: 0.3rem; }
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <h1>📊 Markt‑Status · Börsenöffnungszeiten</h1>
+    <div class="sub">Handelszeiten für Deutschland + USA (Echtzeitanzeige)</div>
+    <div class="live-badge">
+      <span class="pulse"></span>
+      <span>Live basierend auf deiner Systemzeit</span>
+    </div>
+  </div>
+
+  <div class="exchange-grid" id="exchangeGrid">
+    <!-- dynamic cards injected via JS -->
+  </div>
+
+  <div class="footnote">
+    ⏰ Alle Zeiten basieren auf <strong>deiner lokalen Zeitzone</strong> (Browser/System).<br>
+    ✅ Tradegate, Xetra, Frankfurt: Montag–Freitag. US-Börsen (NYSE, NASDAQ): reguläre Session.<br>
+    ℹ️ Wochenend-Handel ist extrem selten (nur spezielle OTC). Anzeige zeigt "GESCHLOSSEN" an Samstagen/Sonntagen.
+  </div>
+  <div class="refresh-note">
+    <button id="refreshBtn">🔄 Status aktualisieren</button> — Seite zeigt live Öffnungsstatus
+  </div>
+</div>
+
+<script>
+  (function() {
+    // ----- definierte Börsen + Zeitzonen ----------
+    // Alle Zeiten werden in der LOKALEN Zeitzone des Users berechnet
+    // Für jeden Eintrag: openingHourLocal, closingHourLocal, sowie evtl. separate "early close" ist hier Standard.
+    // Achtung: US Börsen in Eastern Time (ET) -> müssen in lokale Zeit konvertiert werden.
+    // Ansatz: Wir definieren die Regeln in ET (für USA) und in CET/CEST für DE (Tradegate/Xetra/Frankfurt)
+    // Da der Browser die Sommerzeit korrekt behandelt, vergleichen wir mit aktuellen UTC-Local-Stunden.
+    
+    // Hilfsfunktionen -------------------------------------------------
+    function getCurrentLocalDateTime() {
+      return new Date(); // lokale Browserzeit
+    }
+
+    // extrahiere Wochentag (0=Sonntag ... 6=Samstag) Achtung: getDay() So=0
+    function isWeekend(date) {
+      const day = date.getDay();
+      return day === 0 || day === 6;   // Samstag oder Sonntag
+    }
+
+    // ---------- DEUTSCHE Börsen (Handel: Mo-Fr, KEIN Samstag/Sonntag)
+    // Typische Zeiten: Xetra 9:00 - 17:30, Tradegate 8:00 - 22:00, Frankfurt (Börse) 8:00 - 20:00 
+    // Wir nutzen realistische Zeiten basierend auf lokaler Zeit (DE Börsen haben lokale Zeit = CET/CEST)
+    function isGermanExchangeOpen(exchangeConfig, now) {
+      if (isWeekend(now)) return false;  // Sa/So grundsätzlich geschlossen (ausser evtl. Spezial, ignorieren wir)
+      const hours = now.getHours();
+      const minutes = now.getMinutes();
+      const currentMinutes = hours * 60 + minutes;
+      const openMinutes = exchangeConfig.openHour * 60 + (exchangeConfig.openMinute || 0);
+      const closeMinutes = exchangeConfig.closeHour * 60 + (exchangeConfig.closeMinute || 0);
+      return (currentMinutes >= openMinutes && currentMinutes < closeMinutes);
+    }
+
+    // ---------- US Börsen (NYSE, NASDAQ) : reguläre Handelszeiten 9:30 AM - 4:00 PM Eastern Time (ET)
+    // Wir müssen die aktuelle lokale Zeit in Eastern Time umrechnen, um den Status korrekt zu bestimmen
+    // Dazu verwenden wir toLocaleString mit 'America/New_York' timeZone
+    function isUSEasternExchangeOpen(now) {
+      if (isWeekend(now)) return false; // Wochenende -> geschlossen
+      // Eastern Time aktuell (EDT oder EST) ermitteln
+      const easternTimeStr = now.toLocaleString("en-US", { timeZone: "America/New_York", hour12: false });
+      const easternDate = new Date(easternTimeStr);
+      const hourET = easternDate.getHours();
+      const minuteET = easternDate.getMinutes();
+      const currentETMinutes = hourET * 60 + minuteET;
+      const openET = 9 * 60 + 30;   // 9:30 AM
+      const closeET = 16 * 60 + 0;   // 4:00 PM
+      return (currentETMinutes >= openET && currentETMinutes < closeET);
+    }
+
+    // --------------------------------------------------------------
+    // Hilfsfunktionen für nächste Öffnungszeiten (lesbare Anzeige)
+    // Für DE: nächster Werktag, für USA: nächster Werktag in ET
+    function getNextGermanOpening(exchangeConfig) {
+      const now = new Date();
+      let nextDate = new Date(now);
+      // Falls aktuell geöffnet -> vielleicht interessiert trotzdem "nächste schließung" aber besser nächste Öffnung falls geschlossen
+      // Wir nutzen für die Anzeige "nächste Öffnung" wenn aktuell geschlossen.
+      // Inkrementiere Tag für Tag bis Werktag und setze Uhrzeit auf openHour/openMinute
+      let daysAdded = 0;
+      let candidate = new Date(now);
+      if (isWeekend(candidate)) {
+        // springe zum Montag
+        let dow = candidate.getDay();
+        let addDays = (dow === 0) ? 1 : (6 - dow + 1); // So -> +1 ; Sa->+2
+        candidate.setDate(candidate.getDate() + addDays);
+        daysAdded = addDays;
+      }
+      // Jetzt check ob innerhalb Handelsfenster? Wenn aktuell NACH closing time (und wochentag), dann nächsten Tag
+      while (true) {
+        if (isWeekend(candidate)) {
+          candidate.setDate(candidate.getDate() + 1);
+          continue;
+        }
+        const hours = candidate.getHours();
+        const mins = candidate.getMinutes();
+        const currMin = hours*60 + mins;
+        const closeMin = exchangeConfig.closeHour*60 + (exchangeConfig.closeMinute||0);
+        const openMin = exchangeConfig.openHour*60 + (exchangeConfig.openMinute||0);
+        // wenn aktuelle Zeit bereits nach Schließung, dann nächsten Tag, selbe Öffnungszeit
+        if (currMin >= closeMin) {
+          candidate.setDate(candidate.getDate() + 1);
+          continue;
+        }
+        // wenn vor Öffnung (selber Tag), setze auf Öffnungszeit
+        if (currMin < openMin) {
+          candidate.setHours(exchangeConfig.openHour, exchangeConfig.openMinute || 0, 0, 0);
+        } else {
+          // wir sind innerhalb der Öffnungszeit? eigentlich dann wäre offen, aber dann ruft diese Funktion nur bei geschlossen auf
+          // aber für Sicherheit: setze auf Öffnung morgen?
+          if (currMin >= openMin && currMin < closeMin) {
+            // eigentlich offen, trotzdem schauen wir auf morgen? gewünscht: nächste Öffnung nach schließung
+            candidate.setDate(candidate.getDate() + 1);
+            continue;
+          }
+          candidate.setHours(exchangeConfig.openHour, exchangeConfig.openMinute || 0, 0, 0);
+        }
+        break;
+      }
+      return candidate;
+    }
+
+    function getNextUSOpening() {
+      const now = new Date();
+      const etNowStr = now.toLocaleString("en-US", { timeZone: "America/New_York" });
+      let etDate = new Date(etNowStr);
+      let nextOpenET = new Date(etDate);
+      // 9:30 AM ET
+      if (isWeekend(etDate)) {
+        // add days to Monday
+        let dow = etDate.getDay();
+        let addDays = (dow === 0) ? 1 : (6 - dow + 1);
+        nextOpenET.setDate(nextOpenET.getDate() + addDays);
+        nextOpenET.setHours(9, 30, 0, 0);
+      } else {
+        const currentHourET = etDate.getHours();
+        const currentMinET = etDate.getMinutes();
+        const currETMin = currentHourET*60+currentMinET;
+        const closeETMin = 16*60;
+        const openETMin = 9*60+30;
+        if (currETMin < openETMin) {
+          // gleicher Tag, vor Öffnung
+          nextOpenET.setHours(9, 30, 0, 0);
+        } else if (currETMin >= closeETMin) {
+          // nach Börsenschluss, nächster Werktag
+          nextOpenET.setDate(nextOpenET.getDate() + 1);
+          if (nextOpenET.getDay() === 6) nextOpenET.setDate(nextOpenET.getDate() + 2);
+          if (nextOpenET.getDay() === 0) nextOpenET.setDate(nextOpenET.getDate() + 1);
+          nextOpenET.setHours(9, 30, 0, 0);
+        } else {
+          // eigentlich geöffnet, falls diese Funktion aufgerufen wird (geschlossen), dann seltsam, aber für Klarheit: nächstes Öffnungsfenster nächster Tag
+          nextOpenET.setDate(nextOpenET.getDate() + 1);
+          if (nextOpenET.getDay() === 6) nextOpenET.setDate(nextOpenET.getDate() + 2);
+          if (nextOpenET.getDay() === 0) nextOpenET.setDate(nextOpenET.getDate() + 1);
+          nextOpenET.setHours(9, 30, 0, 0);
+        }
+      }
+      // Umwandeln zurück in lokale Zeit für Anzeige
+      const nextLocal = new Date(nextOpenET.toLocaleString("en-US", { timeZone: "Europe/Berlin" }));
+      // Vermeide falsche Anzeige: direkt Datum
+      return nextOpenET; // als ET-Date referenz, für Formatierung in lokale Zeit
+    }
+
+    // Formatierung für nächste Öffnung (lokales Datum + Uhrzeit)
+    function formatNextOpening(dateObj, isUS=false) {
+      if (!dateObj) return " — ";
+      // Für US: Umwandeln zu lokaler Zeitanzeige des Users (Browser)
+      const localDate = new Date(dateObj);
+      return localDate.toLocaleString(undefined, { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+    }
+
+    // ----- Exchanges definieren -----
+    const exchanges = [
+      {
+        name: "🇩🇪 Tradegate",
+        short: "Tradegate",
+        region: "DE",
+        config: { openHour: 8, openMinute: 0, closeHour: 22, closeMinute: 0 } // 8:00 - 22:00
+      },
+      {
+        name: "🇩🇪 Xetra",
+        short: "Xetra",
+        region: "DE",
+        config: { openHour: 9, openMinute: 0, closeHour: 17, closeMinute: 30 }
+      },
+      {
+        name: "🇩🇪 Börse Frankfurt",
+        short: "Frankfurt",
+        region: "DE",
+        config: { openHour: 8, openMinute: 0, closeHour: 20, closeMinute: 0 }
+      },
+      {
+        name: "🇺🇸 NYSE",
+        short: "NYSE",
+        region: "US",
+        config: null  // special US handling
+      },
+      {
+        name: "🇺🇸 NASDAQ",
+        short: "NASDAQ",
+        region: "US",
+        config: null
+      }
+    ];
+
+    function updateStatus() {
+      const now = new Date();
+      const grid = document.getElementById("exchangeGrid");
+      if (!grid) return;
+      grid.innerHTML = "";
+
+      for (let ex of exchanges) {
+        let isOpen = false;
+        let nextOpenDate = null;
+        let closingTimeStr = "";
+        let openingTimeStr = "";
+
+        if (ex.region === "DE" && ex.config) {
+          isOpen = isGermanExchangeOpen(ex.config, now);
+          // Schließzeit (lokal)
+          const closeH = ex.config.closeHour;
+          const closeM = ex.config.closeMinute;
+          const openH = ex.config.openHour;
+          const openM = ex.config.openMinute;
+          openingTimeStr = `${openH.toString().padStart(2,'0')}:${openM.toString().padStart(2,'0')} Uhr`;
+          closingTimeStr = `${closeH.toString().padStart(2,'0')}:${closeM.toString().padStart(2,'0')} Uhr`;
+          if (!isOpen) {
+            const nextOpen = getNextGermanOpening(ex.config);
+            nextOpenDate = nextOpen;
+          } else {
+            // Für geöffnete Börse: nächste Schließung am selben Tag
+            let closeToday = new Date(now);
+            closeToday.setHours(closeH, closeM, 0, 0);
+            if (closeToday < now) closeToday.setDate(closeToday.getDate() + 1);
+            nextOpenDate = closeToday; // für Anzeige "nächste Änderung: schließt"
+          }
+        } 
+        else if (ex.region === "US") {
+          isOpen = isUSEasternExchangeOpen(now);
+          // US Öffnungszeiten in ET anzeigen, aber wir zeigen auch lokale Referenz
+          openingTimeStr = "15:30 Uhr (MEZ) / 09:30 ET";
+          closingTimeStr = "22:00 Uhr (MEZ) / 16:00 ET";
+          if (!isOpen) {
+            const nextOpenET = getNextUSOpening();
+            nextOpenDate = nextOpenET;
+          } else {
+            // bei geöffneter US Börse: nächstes Ereignis = Schließung heute (16:00 ET)
+            const nowET = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
+            let closeTodayET = new Date(nowET);
+            closeTodayET.setHours(16, 0, 0, 0);
+            if (closeTodayET <= nowET) closeTodayET.setDate(closeTodayET.getDate() + 1);
+            nextOpenDate = closeTodayET;
+          }
+        }
+
+        // build extra event description
+        let eventText = "";
+        if (isOpen) {
+          eventText = `🔒 Schließt am ${formatNextOpening(nextOpenDate, ex.region === "US")}`;
+        } else {
+          if (nextOpenDate) eventText = `🟢 Nächste Öffnung: ${formatNextOpening(nextOpenDate, ex.region === "US")}`;
+          else eventText = `⛔ Keine Öffnungszeiten (Wochenende/Feiertag?)`;
+        }
+
+        const statusClass = isOpen ? "open" : "closed";
+        const statusLabel = isOpen ? "🔓 GEÖFFNET" : "🔒 GESCHLOSSEN";
+
+        const card = document.createElement("div");
+        card.className = "card";
+        card.innerHTML = `
+          <div class="exchange-name">
+            <h2>${ex.name}</h2>
+            <span class="status ${statusClass}">${statusLabel}</span>
+          </div>
+          <div class="info-row">
+            <span class="label">📅 Handelszeiten (lokal):</span>
+            <span class="value">${openingTimeStr} – ${closingTimeStr}</span>
+          </div>
+          <div class="info-row">
+            <span class="label">⏱️ Wochenende:</span>
+            <span class="value">Sa/So geschlossen (kein regulärer Handel)</span>
+          </div>
+          <div class="next-event">
+            ${eventText}
+          </div>
+          <div class="info-row" style="margin-top: 0.5rem;">
+            <span class="label">🕒 Serverzeit (dein Gerät):</span>
+            <span class="value">${now.toLocaleTimeString()}</span>
+          </div>
+        `;
+        grid.appendChild(card);
+      }
+
+      // Zusatzkarte: Hinweis zu "Limit-Order" Wochenende 
+      const noteCard = document.createElement("div");
+      noteCard.className = "card";
+      noteCard.style.background = "#eef2f1";
+      noteCard.innerHTML = `
+        <div class="exchange-name">
+          <h2>📌 Für deine offenen Orders</h2>
+          <span class="status closed">Wochenend‑Modus</span>
+        </div>
+        <div style="font-size:0.9rem; margin-top: 0.3rem;">
+          ⚡ Heute ist <strong>${now.toLocaleDateString(undefined, { weekday: 'long' })}</strong>.<br>
+          Deine Limit‑Order wird <strong>am nächsten Werktag (Montag früh)</strong> automatisch ausgeführt, sobald der Markt öffnet und dein Limit erreicht wird.<br>
+          ✅ <strong>Tradegate & Xetra:</strong> Samstag/Sonntag keine Ausführung.
+        </div>
+        <div class="next-event" style="margin-top: 0.8rem;">
+          💡 Geduld zahlt sich aus – am Montag um 8:00/9:00 Uhr geht's weiter.
+        </div>
+      `;
+      grid.appendChild(noteCard);
+    }
+
+    updateStatus();
+    const btn = document.getElementById("refreshBtn");
+    if (btn) {
+      btn.addEventListener("click", () => {
+        updateStatus();
+      });
+    }
+    // Optional: Auto refresh alle 60 Sekunden (optional)
+    setInterval(() => {
+      updateStatus();
+    }, 60000);
+  })();
+</script>
+</body>
+</html>
