@@ -1,0 +1,230 @@
+[
+    {
+        "stock": "NTDOY",
+        "price": 11.18,
+        "currency": "$",
+        "date": "2026-05-13",
+        "timestamp": "2026-05-13 18:05:56",
+        "saved_at": 1778695556,
+        "exchange_market": "OTC Markets"
+    },
+    {
+        "stock": "GME",
+        "price": 22.41,
+        "currency": "$",
+        "date": "2026-05-13",
+        "timestamp": "2026-05-13 18:06:07",
+        "saved_at": 1778695567,
+        "exchange_market": "NYSE"
+    },
+    {
+        "stock": "INTC",
+        "price": 120.29,
+        "currency": "$",
+        "date": "2026-05-14",
+        "timestamp": "2026-05-14 00:24:55",
+        "saved_at": 1778718295,
+        "exchange_market": "NASDAQ"
+    },
+    {
+        "stock": "EA",
+        "price": 200.18,
+        "currency": "$",
+        "date": "2026-05-14",
+        "timestamp": "2026-05-14 06:30:18",
+        "saved_at": 1778740218,
+        "exchange_market": "NASDAQ"
+    },
+    {
+        "stock": "MAN",
+        "price": 26.09,
+        "currency": "$",
+        "date": "2026-05-15",
+        "timestamp": "2026-05-15 14:21:11",
+        "saved_at": 1778854871,
+        "exchange_market": "NYSE"
+    },
+    {
+        "stock": "STUB",
+        "price": 8.82,
+        "currency": "$",
+        "date": "2026-05-16",
+        "timestamp": "2026-05-16 08:21:27",
+        "saved_at": 1778919687,
+        "exchange_market": "NYSE"
+    },
+    {
+        "stock": "MSFT",
+        "price": 419.09,
+        "currency": "$",
+        "date": "2026-05-22",
+        "timestamp": "2026-05-22 12:21:59",
+        "saved_at": 1779452519,
+        "exchange_market": "NASDAQ"
+    },
+    {
+        "stock": "WTI",
+        "price": 4.43,
+        "currency": "$",
+        "date": "2026-05-23",
+        "timestamp": "2026-05-23 06:53:05",
+        "saved_at": 1779519185,
+        "exchange_market": "NYSE"
+    },
+    {
+        "stock": "NIO",
+        "price": 5.2,
+        "currency": "$",
+        "date": "2026-05-23",
+        "timestamp": "2026-05-23 09:38:50",
+        "saved_at": 1779529130,
+        "exchange_market": "NYSE"
+    },
+    {
+        "stock": "AI",
+        "price": 9.29,
+        "currency": "$",
+        "date": "2026-05-23",
+        "timestamp": "2026-05-23 09:43:33",
+        "saved_at": 1779529413,
+        "exchange_market": "NYSE"
+    },
+    {
+        "stock": "DTD2.DE",
+        "price": 2.15,
+        "currency": "$",
+        "date": "2026-05-23",
+        "timestamp": "2026-05-23 09:52:08",
+        "saved_at": 1779529928,
+        "exchange_market": "ETR",
+        "isin": "DE0001262152",
+        "nrbght": 2,
+        "depot": "comdirect"
+    },
+    {
+        "stock": "STLA",
+        "price": 7.61,
+        "currency": "$",
+        "date": "2026-05-23",
+        "timestamp": "2026-05-23 14:14:07",
+        "saved_at": 1779545647,
+        "exchange_market": "NYSE"
+    },
+    {
+        "stock": "TSM",
+        "price": 404.52,
+        "currency": "$",
+        "date": "2026-05-23",
+        "timestamp": "2026-05-23 19:22:18",
+        "saved_at": 1779564138,
+        "exchange_market": "NYSE"
+    },
+    {
+        "stock": "BYDDF",
+        "price": 11.69,
+        "currency": "$",
+        "date": "2026-05-23",
+        "timestamp": "2026-05-23 19:29:40",
+        "saved_at": 1779564580,
+        "exchange_market": "OTC Markets",
+        "isin": "CNE100000296",
+        "nrbght": 1,
+        "depot": "ingdiba"
+    },
+    {
+        "stock": "VNA.DE",
+        "price": 21.12,
+        "currency": "$",
+        "date": "2026-05-24",
+        "timestamp": "2026-05-24 06:14:13",
+        "saved_at": 1779603253,
+        "exchange_market": "ETR"
+    },
+    {
+        "stock": "PYPL",
+        "price": 44.23,
+        "currency": "$",
+        "date": "2026-05-24",
+        "timestamp": "2026-05-24 06:25:56",
+        "saved_at": 1779603956,
+        "exchange_market": "NASDAQ"
+    },
+    {
+        "stock": "MBG.DE",
+        "price": 50.12,
+        "currency": "$",
+        "date": "2026-05-24",
+        "timestamp": "2026-05-24 08:08:40",
+        "saved_at": 1779610120,
+        "exchange_market": "FRA"
+    },
+    {
+        "stock": "SPCE",
+        "price": 3.24,
+        "currency": "$",
+        "date": "2026-05-24",
+        "timestamp": "2026-05-24 14:33:54",
+        "saved_at": 1779633234,
+        "exchange_market": "NYSE",
+        "isin": "US92766K4031",
+        "nrbght": 1,
+        "depot": "ingdiba"
+    },
+    {
+        "stock": "MNTS",
+        "price": 7.38,
+        "currency": "$",
+        "date": "2026-05-25",
+        "timestamp": "2026-05-25 07:24:16",
+        "saved_at": 1779693856,
+        "exchange_market": "NASDAQ"
+    },
+    {
+        "stock": "KHC",
+        "price": 23.79,
+        "currency": "$",
+        "date": "2026-05-25",
+        "timestamp": "2026-05-25 07:37:04",
+        "saved_at": 1779694624,
+        "exchange_market": "NASDAQ"
+    },
+    {
+        "stock": "MAXXF",
+        "price": 1.71,
+        "currency": "$",
+        "date": "2026-05-25",
+        "timestamp": "2026-05-25 07:58:58",
+        "saved_at": 1779695938,
+        "exchange_market": "OTCMKTS"
+    },
+    {
+        "stock": "U8X0.F",
+        "price": 0.21,
+        "currency": "$",
+        "date": "2026-05-25",
+        "timestamp": "2026-05-25 11:40:09",
+        "saved_at": 1779709209,
+        "exchange_market": "FRA",
+        "isin": "CA4299351094",
+        "nrbght": 98,
+        "depot": "ingdiba"
+    },
+    {
+        "stock": "IFX.DE",
+        "price": 76.73,
+        "currency": "$",
+        "date": "2026-05-25",
+        "timestamp": "2026-05-25 15:58:08",
+        "saved_at": 1779724688,
+        "exchange_market": "XETRA"
+    },
+    {
+        "stock": "CNP",
+        "price": 42.83,
+        "currency": "$",
+        "date": "2026-05-25",
+        "timestamp": "2026-05-25 16:05:03",
+        "saved_at": 1779725103,
+        "exchange_market": "NYSE"
+    }
+]
