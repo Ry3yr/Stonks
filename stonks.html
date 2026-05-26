@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Portfolio Gain/Loss Orbs</title>
+  <style>
+    .orb {
+      background-color: #2ecc71;
+      color: white;
+      min-width: 20px;
+      height: 20px;
+      line-height: 20px;
+      text-align: center;
+      border-radius: 50%;
+      font-weight: bold;
+      text-decoration: none;
+      cursor: pointer;
+      font-size: 12px;
+      display: inline-block;
+      margin-right: 0px;  /* CHANGED: was 10px, now 0px so orbs touch each other */
+    }
+    .orb.loss {
+      background-color: #e74c3c;
+    }
+    .label {
+      font-size: 13px;
+      margin-right: 20px;
+      color: #333;
+    }
+    .container {
+      padding: 0px;
+      background: transparent;
+      border-radius: 0px;
+    }
+    #debug {
+      font-size: 11px;
+      color: #888;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <a href="#" id="gainOrb" class="orb" target="_blank">0</a>
+    <!--<span class="label">Total Gain</span>-->
+    
+    <a href="#" id="lossOrb" class="orb loss" target="_blank">0</a>
+    <!--<span class="label">Total Loss</span>-->
+  </div>
+  <details><summary> </summary><div id="debug"></div></details>
+
+  <script>
+    const PHP_URL = 'quickcheck.php';
+    
+    function logDebug(msg) {
+      const debugDiv = document.getElementById('debug');
+      const p = document.createElement('div');
+      p.textContent = '[DEBUG] ' + msg;
+      debugDiv.appendChild(p);
+      console.log('[DEBUG]', msg);
+    }
+    
+    function parseDollar(str) {
+      const match = str.match(/\$?([\d,.]+)/);
+      return match ? parseFloat(match[1].replace(/,/g, '')) : 0;
+    }
+    
+    async function fetchAndDisplay() {
+      try {
+        logDebug('Fetching from: ' + PHP_URL);
+        const response = await fetch(PHP_URL);
+        const html = await response.text();
+        logDebug('Fetch successful, parsing HTML...');
+        
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+        
+        let totalGain = 0, totalLoss = 0;
+        const tables = doc.querySelectorAll('table');
+        logDebug('Found ' + tables.length + ' table(s)');
+        
+        for (let table of tables) {
+          const headers = Array.from(table.querySelectorAll('th')).map(th => th.innerText.toLowerCase());
+          const isGainTable = headers.some(h => h.includes('gain/share') || h.includes('total gain'));
+          const isLossTable = headers.some(h => h.includes('loss/share') || h.includes('total loss'));
+          
+          if (isGainTable) logDebug('Found Gain table');
+          if (isLossTable) logDebug('Found Loss table');
+          
+          const rows = table.querySelectorAll('tbody tr');
+          for (let row of rows) {
+            const cells = row.querySelectorAll('td');
+            for (let cell of cells) {
+              const text = cell.innerText;
+              if (isGainTable && text.includes('= +')) {
+                const val = parseDollar(text);
+                totalGain += val;
+                logDebug(`Added gain: $${val} (total now: $${totalGain})`);
+              }
+              if (isLossTable && text.includes('= -')) {
+                const val = parseDollar(text);
+                totalLoss += val;
+                logDebug(`Added loss: $${val} (total now: $${totalLoss})`);
+              }
+            }
+          }
+        }
+        
+        totalGain = Math.round(totalGain * 100) / 100;
+        totalLoss = Math.round(totalLoss * 100) / 100;
+        
+        const gainOrb = document.getElementById('gainOrb');
+        const lossOrb = document.getElementById('lossOrb');
+        
+        gainOrb.textContent = totalGain.toFixed(2);
+        lossOrb.textContent = totalLoss.toFixed(2);
+        
+        // Set href to open PHP URL in new tab
+        gainOrb.href = PHP_URL;
+        lossOrb.href = PHP_URL;
+        
+        logDebug(`Final totals - Gain: $${totalGain}, Loss: $${totalLoss}`);
+        
+      } catch (error) {
+        logDebug('Error: ' + error.message);
+        document.getElementById('gainOrb').textContent = 'Err';
+        document.getElementById('lossOrb').textContent = 'Err';
+      }
+    }
+    
+    fetchAndDisplay();
+  </script>
+</body>
+</html>
