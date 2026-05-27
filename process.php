@@ -279,7 +279,7 @@
 
     function fetchExchangeInfoForGoogle($symbol) {
         // If the symbol has a suffix (.DE, .PA, .L, .T, .HK etc.)
-        // derive the Google Finance exchange code directly from it —
+        // derive the Google Finance exchange code directly from it 
         // no API call needed, no hardcoded list for every country.
         if (preg_match('/\.([A-Z]+)$/i', $symbol, $m)) {
             $suffixMap = [
@@ -369,9 +369,9 @@
 
     $currencySymbols = [
         'USD' => ['symbol' => '$',  'rate' => 1,     'code' => 'USD'],
-        'EUR' => ['symbol' => '€',  'rate' => 0.92,  'code' => 'EUR'],
-        'JPY' => ['symbol' => '¥',  'rate' => 148.5, 'code' => 'JPY'],
-        'GBP' => ['symbol' => '£',  'rate' => 0.79,  'code' => 'GBP']
+        'EUR' => ['symbol' => '',  'rate' => 0.92,  'code' => 'EUR'],
+        'JPY' => ['symbol' => '',  'rate' => 148.5, 'code' => 'JPY'],
+        'GBP' => ['symbol' => '',  'rate' => 0.79,  'code' => 'GBP']
     ];
 
     $targetCurrency = $currencySymbols[$currencyParam] ?? $currencySymbols['USD'];
@@ -439,12 +439,21 @@
                 $result = $data['chart']['result'][0];
                 $meta   = $result['meta'];
 
-                $originalPrice  = isset($meta['regularMarketPrice']) ? $meta['regularMarketPrice'] : 'N/A';
-                $previousClose  = isset($meta['previousClose'])      ? $meta['previousClose']      : null;
+                $originalPrice        = isset($meta['regularMarketPrice']) ? $meta['regularMarketPrice'] : 'N/A';
+                $previousClose        = isset($meta['previousClose'])      ? $meta['previousClose']      : null;
+                $originalCurrencyCode = isset($meta['currency'])           ? strtoupper($meta['currency']) : 'USD';
 
+                // Rate to go from the stock's local currency to USD.
+                // $rateData['rates'] is relative to USD (e.g. JPY=>150 means 1 USD = 150 JPY).
+                $localToUsdRate = 1.0;
+                if ($originalCurrencyCode !== 'USD' && isset($rateData['rates'][$originalCurrencyCode]) && $rateData['rates'][$originalCurrencyCode] > 0) {
+                    $localToUsdRate = 1.0 / $rateData['rates'][$originalCurrencyCode];
+                }
+
+                // Full conversion: local currency -> USD -> display currency
                 $convertedPrice = 'N/A';
                 if ($originalPrice !== 'N/A' && is_numeric($originalPrice)) {
-                    $convertedPrice = $originalPrice * $targetRate;
+                    $convertedPrice = $originalPrice * $localToUsdRate * $targetRate;
                 }
 
                 $changeDisplay      = 'N/A';
@@ -452,18 +461,17 @@
                 $changeSign         = '';
                 $changePercentSign  = '';
                 if ($originalPrice !== 'N/A' && $previousClose && is_numeric($originalPrice) && is_numeric($previousClose)) {
-                    $changeVal         = $originalPrice - $previousClose;
+                    $changeVal         = $originalPrice - $previousClose;             // in local currency
                     $changePercentVal  = ($changeVal / $previousClose) * 100;
-                    $changeConverted   = $changeVal * $targetRate;
+                    $changeConverted   = $changeVal * $localToUsdRate * $targetRate;  // local -> USD -> target
                     $changeDisplay     = number_format($changeConverted, 2);
                     $changePercent     = number_format($changePercentVal, 2);
                     $changeSign        = ($changeConverted >= 0) ? '+' : '';
                     $changePercentSign = ($changePercentVal >= 0) ? '+' : '';
                 }
 
-                $fetchedName         = isset($meta['longName'])    ? $meta['longName']    : (isset($meta['shortName']) ? $meta['shortName'] : $symbol);
-                $originalCurrencyCode = isset($meta['currency'])   ? $meta['currency']    : 'USD';
-                $exchangeName        = isset($meta['exchangeName']) ? $meta['exchangeName'] : 'N/A';
+                $fetchedName  = isset($meta['longName'])    ? $meta['longName']    : (isset($meta['shortName']) ? $meta['shortName'] : $symbol);
+                $exchangeName = isset($meta['exchangeName']) ? $meta['exchangeName'] : 'N/A';
                 $displayName         = ($wasSearch && $companyName) ? $companyName : $fetchedName;
 
                 // -- Google Finance link (matches portfolio page logic) ----------
@@ -509,7 +517,8 @@
                 echo '<div class="name">' . htmlspecialchars($displayName) . '</div>';
                 echo '<div class="price" style="color: #28a745;">' . $targetSymbol . ' ' . number_format((float)$convertedPrice, 2) . '</div>';
                 if ($originalCurrencyCode != $targetCode && $originalPrice !== 'N/A') {
-                    echo '<div class="price-usd">(Original: ' . $originalCurrencyCode . ' ' . number_format((float)$originalPrice, 2) . ' @ 1 ' . $originalCurrencyCode . ' = ' . number_format($targetRate, 4) . ' ' . $targetCode . ')</div>';
+                    $localToTargetRate = $localToUsdRate * $targetRate;
+                    echo '<div class="price-usd">(Original: ' . $originalCurrencyCode . ' ' . number_format((float)$originalPrice, 2) . ' @ 1 ' . $originalCurrencyCode . ' = ' . number_format($localToTargetRate, 4) . ' ' . $targetCode . ')</div>';
                 }
                 echo '<div class="info">';
                 echo 'Change: ' . ($changeDisplay != 'N/A' ? $changeSign . $changeDisplay : 'N/A');

@@ -297,12 +297,12 @@ $(document).ready(function(){
         $currencies = [
             'USD' => ['symbol' => '$', 'code' => 'USD'],
             '$' => ['symbol' => '$', 'code' => 'USD'],
-            'EUR' => ['symbol' => '€', 'code' => 'EUR'],
-            '€' => ['symbol' => '€', 'code' => 'EUR'],
-            'JPY' => ['symbol' => '¥', 'code' => 'JPY'],
-            '¥' => ['symbol' => '¥', 'code' => 'JPY'],
-            'GBP' => ['symbol' => '£', 'code' => 'GBP'],
-            '£' => ['symbol' => '£', 'code' => 'GBP']
+            'EUR' => ['symbol' => '', 'code' => 'EUR'],
+            '' => ['symbol' => '', 'code' => 'EUR'],
+            'JPY' => ['symbol' => '', 'code' => 'JPY'],
+            '' => ['symbol' => '', 'code' => 'JPY'],
+            'GBP' => ['symbol' => '', 'code' => 'GBP'],
+            '' => ['symbol' => '', 'code' => 'GBP']
         ];
         return $currencies[$currencyCode] ?? ['symbol' => '$', 'code' => 'USD'];
     }
@@ -327,14 +327,20 @@ $(document).ready(function(){
         return $symbol . number_format($amount, 2);
     }
     
-    function getLivePriceUSD($symbol) {
+    function getLivePriceUSD($symbol, $exchangeRates) {
         $url = "https://query1.finance.yahoo.com/v8/finance/chart/" . urlencode($symbol);
         $response = curl_get($url);
         
         if ($response) {
             $data = json_decode($response, true);
             if (isset($data['chart']['result'][0]['meta']['regularMarketPrice'])) {
-                return $data['chart']['result'][0]['meta']['regularMarketPrice'];
+                $price    = $data['chart']['result'][0]['meta']['regularMarketPrice'];
+                $currency = strtoupper($data['chart']['result'][0]['meta']['currency'] ?? 'USD');
+                // Convert local-currency price to USD
+                if ($currency !== 'USD' && isset($exchangeRates[$currency]) && $exchangeRates[$currency] > 0) {
+                    $price = $price / $exchangeRates[$currency];
+                }
+                return $price;
             }
         }
         return null;
@@ -436,7 +442,7 @@ $(document).ready(function(){
     $uniqueSymbols = array_unique(array_column($stocks, 'stock'));
     $livePricesUSD = [];
     foreach ($uniqueSymbols as $symbol) {
-        $price = getLivePriceUSD($symbol);
+        $price = getLivePriceUSD($symbol, $exchangeRates);
         if ($price) $livePricesUSD[$symbol] = $price;
         usleep(100000);
     }
@@ -725,7 +731,7 @@ $(document).ready(function(){
                             <?php endforeach; ?>
                             
                             <?php if ($hasExchange): ?>
-                                <button class="commit-btn" disabled style="background:#6c757d;">?</button>
+                                <button class="commit-btn" disabled style="background:#6c757d;"> </button>
                             <?php else: ?>
                                 <a href="save.php?update=yes&handle=<?php echo urlencode($symbol); ?>&stockexchg=<?php echo urlencode($exchangeDisplay); ?>" class="commit-btn" onclick="return confirm('Save <?php echo htmlspecialchars($exchangeDisplay); ?> as permanent exchange for <?php echo htmlspecialchars($symbol); ?>?')">? Commit</a>
                             <?php endif; ?>
