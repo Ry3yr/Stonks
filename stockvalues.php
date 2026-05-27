@@ -250,6 +250,10 @@ $(document).ready(function(){
             flex-wrap: wrap;
             gap: 4px;
         }
+        .trend-up { color: #28a745; font-weight: bold; }
+        .trend-down { color: #dc3545; font-weight: bold; }
+        .spark-wrapper { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        .trend-cell { white-space: nowrap; }
     </style>
 </head>
 <body>
@@ -297,12 +301,12 @@ $(document).ready(function(){
         $currencies = [
             'USD' => ['symbol' => '$', 'code' => 'USD'],
             '$' => ['symbol' => '$', 'code' => 'USD'],
-            'EUR' => ['symbol' => '', 'code' => 'EUR'],
-            '' => ['symbol' => '', 'code' => 'EUR'],
-            'JPY' => ['symbol' => '', 'code' => 'JPY'],
-            '' => ['symbol' => '', 'code' => 'JPY'],
-            'GBP' => ['symbol' => '', 'code' => 'GBP'],
-            '' => ['symbol' => '', 'code' => 'GBP']
+            'EUR' => ['symbol' => '€', 'code' => 'EUR'],
+            '€' => ['symbol' => '€', 'code' => 'EUR'],
+            'JPY' => ['symbol' => '¥', 'code' => 'JPY'],
+            '¥' => ['symbol' => '¥', 'code' => 'JPY'],
+            'GBP' => ['symbol' => '£', 'code' => 'GBP'],
+            '£' => ['symbol' => '£', 'code' => 'GBP']
         ];
         return $currencies[$currencyCode] ?? ['symbol' => '$', 'code' => 'USD'];
     }
@@ -344,6 +348,60 @@ $(document).ready(function(){
             }
         }
         return null;
+    }
+    
+    // NEW: Get 7-day trend data for a symbol
+    function get7DayTrend($symbol, $exchangeRates) {
+        $url = "https://query1.finance.yahoo.com/v8/finance/chart/" . urlencode($symbol) . "?range=7d&interval=1d";
+        $response = curl_get($url);
+        
+        if (!$response) return null;
+        
+        $data = json_decode($response, true);
+        if (!isset($data['chart']['result'][0])) return null;
+        
+        $result = $data['chart']['result'][0];
+        $closes = $result['indicators']['quote'][0]['close'] ?? [];
+        $validCloses = array_values(array_filter($closes, function($v) { return $v !== null; }));
+        
+        if (count($validCloses) < 2) return null;
+        
+        $oldPrice = $validCloses[0];
+        $newPrice = $validCloses[count($validCloses) - 1];
+        
+        if ($oldPrice <= 0) return null;
+        
+        $change = $newPrice - $oldPrice;
+        $changePct = ($change / $oldPrice) * 100;
+        $trend = $change > 0 ? 'up' : ($change < 0 ? 'down' : 'flat');
+        
+        // Generate sparkline
+        $min = min($validCloses);
+        $max = max($validCloses);
+        $range = $max - $min ?: 1;
+        $height = 30;
+        $width = 100;
+        $step = $width / (count($validCloses) - 1);
+        
+        $points = [];
+        foreach ($validCloses as $i => $value) {
+            $x = $i * $step;
+            $y = $height - (($value - $min) / $range * $height);
+            $points[] = "$x,$y";
+        }
+        
+        $color = $trend === 'up' ? '#28a745' : ($trend === 'down' ? '#dc3545' : '#6c757d');
+        $sparkline = '<svg width="100" height="30" style="display:inline-block; vertical-align:middle;">
+                        <polyline points="' . implode(' ', $points) . '" fill="none" stroke="' . $color . '" stroke-width="2"/>
+                      </svg>';
+        
+        return [
+            'change' => $change,
+            'change_pct' => $changePct,
+            'trend' => $trend,
+            'sparkline' => $sparkline,
+            'trend_text' => $trend === 'up' ? '📈 UP' : ($trend === 'down' ? '📉 DOWN' : '➡️ FLAT')
+        ];
     }
     
     function fetchExchangeInfo($symbol) {
@@ -441,9 +499,16 @@ $(document).ready(function(){
     
     $uniqueSymbols = array_unique(array_column($stocks, 'stock'));
     $livePricesUSD = [];
+    $sevenDayTrends = [];
+    
     foreach ($uniqueSymbols as $symbol) {
         $price = getLivePriceUSD($symbol, $exchangeRates);
         if ($price) $livePricesUSD[$symbol] = $price;
+        
+        // Fetch 7-day trend for each symbol
+        $trend = get7DayTrend($symbol, $exchangeRates);
+        if ($trend) $sevenDayTrends[$symbol] = $trend;
+        
         usleep(100000);
     }
     
@@ -506,7 +571,7 @@ $(document).ready(function(){
                             <strong><?php echo htmlspecialchars($winner['symbol']); ?></strong>
                             <span class="timestamp">
                                 <?php echo formatCurrency($winner['saved_price'], $winner['saved_currency'], $exchangeRates); ?> 
-                                ? 
+                                → 
                                 <?php echo formatCurrency($winner['live_price'], $winner['saved_currency'], $exchangeRates); ?>
                             </span>
                         </div>
@@ -529,7 +594,7 @@ $(document).ready(function(){
                             <strong><?php echo htmlspecialchars($loser['symbol']); ?></strong>
                             <span class="timestamp">
                                 <?php echo formatCurrency($loser['saved_price'], $loser['saved_currency'], $exchangeRates); ?> 
-                                ? 
+                                → 
                                 <?php echo formatCurrency($loser['live_price'], $loser['saved_currency'], $exchangeRates); ?>
                             </span>
                         </div>
@@ -548,9 +613,9 @@ $(document).ready(function(){
         // Debug: Check if buttons are being loaded
         $debugButtons = getSearchButtons();
         if (count($debugButtons) > 0) {
-            echo '<div style="background:#e8f4f8; padding:5px 10px; margin-bottom:10px; font-size:12px; border-radius:5px;">?? Custom search buttons loaded: ' . count($debugButtons) . ' (<strong>' . htmlspecialchars($debugButtons[0]['label']) . '</strong>)</div>';
+            echo '<div style="background:#e8f4f8; padding:5px 10px; margin-bottom:10px; font-size:12px; border-radius:5px;">🔍 Custom search buttons loaded: ' . count($debugButtons) . ' (<strong>' . htmlspecialchars($debugButtons[0]['label']) . '</strong>)</div>';
         } else {
-            echo '<div style="background:#fff3cd; padding:5px 10px; margin-bottom:10px; font-size:12px; border-radius:5px;">?? No searchengs.txt found or empty. Create file with format: filename.php#buttonlabel</div>';
+            echo '<div style="background:#fff3cd; padding:5px 10px; margin-bottom:10px; font-size:12px; border-radius:5px;">⚠️ No searchengs.txt found or empty. Create file with format: filename.php#buttonlabel</div>';
         }
         ?>
         <div id="stockTableContainer">
@@ -562,6 +627,7 @@ $(document).ready(function(){
                         <th>Live Price</th>
                         <th>Change (Value)</th>
                         <th>P&L (Total)</th>
+                        <th>7-Day Trend</th>
                         <th>Date</th>
                         <th>Exchange</th>
                         <th>Actions</th>
@@ -651,6 +717,22 @@ $(document).ready(function(){
                     
                     // Remove .de or .DE from symbol for Google Finance link
                     $googleSymbol = preg_replace('/\.[^.]+$/', '', $symbol);
+                    
+                    // Get 7-day trend data
+                    $trendData = isset($sevenDayTrends[$symbol]) ? $sevenDayTrends[$symbol] : null;
+                    $trendHtml = '';
+                    if ($trendData) {
+                        $trendClass = $trendData['trend'] === 'up' ? 'trend-up' : ($trendData['trend'] === 'down' ? 'trend-down' : '');
+                        $changeSign = $trendData['change'] > 0 ? '+' : '';
+                        $trendHtml = '<div class="spark-wrapper">
+                                        ' . $trendData['sparkline'] . '
+                                        <span class="' . $trendClass . '" style="font-size: 11px;">
+                                            ' . $changeSign . number_format($trendData['change_pct'], 1) . '% ' . $trendData['trend_text'] . '
+                                        </span>
+                                      </div>';
+                    } else {
+                        $trendHtml = '<span style="color:#999;">N/A</span>';
+                    }
                 ?>
                 <tr class="<?php echo $rowClass; ?>">
                     <td style="vertical-align: middle;">
@@ -704,6 +786,9 @@ $(document).ready(function(){
                             <span class="price-neutral" style="font-size:11px;">(use "buy")</span>
                         <?php endif; ?>
                     </td>
+                    <td class="trend-cell" style="vertical-align: middle;">
+                        <?php echo $trendHtml; ?>
+                    </td>
                     <td class="timestamp" style="vertical-align: middle;"><?php echo htmlspecialchars($stock['date']); ?></td>
                     <td style="vertical-align: middle;" class="exchange-cell">
                         <?php if ($hasExchange): ?>
@@ -731,16 +816,16 @@ $(document).ready(function(){
                             <?php endforeach; ?>
                             
                             <?php if ($hasExchange): ?>
-                                <button class="commit-btn" disabled style="background:#6c757d;"> </button>
+                                <button class="commit-btn" disabled style="background:#6c757d;">🔒</button>
                             <?php else: ?>
-                                <a href="save.php?update=yes&handle=<?php echo urlencode($symbol); ?>&stockexchg=<?php echo urlencode($exchangeDisplay); ?>" class="commit-btn" onclick="return confirm('Save <?php echo htmlspecialchars($exchangeDisplay); ?> as permanent exchange for <?php echo htmlspecialchars($symbol); ?>?')">? Commit</a>
+                                <a href="save.php?update=yes&handle=<?php echo urlencode($symbol); ?>&stockexchg=<?php echo urlencode($exchangeDisplay); ?>" class="commit-btn" onclick="return confirm('Save <?php echo htmlspecialchars($exchangeDisplay); ?> as permanent exchange for <?php echo htmlspecialchars($symbol); ?>?')">💾 Commit</a>
                             <?php endif; ?>
                             
                             <a href="buy.php?go=<?php echo urlencode($symbol); ?>" class="gray-buy-link" target="_blank">Buy</a>
                             
                             <button class="delete-btn" onclick="if(confirm('Delete <?php echo htmlspecialchars($symbol); ?>?')) window.location.href='save.php?del=yes&handle=<?php echo urlencode($symbol); ?>'">X</button>
                         </div>
-                    </td>
+                    </tr>
                 </tr>
                 <?php endforeach; ?>
                 </tbody>
@@ -750,6 +835,7 @@ $(document).ready(function(){
     
     <footer>
         Live data from Yahoo Finance | Exchange rates from exchangerate-api.com | Green = up, Red = down<br>
+        <strong>7-Day Trend column</strong> shows sparkline + percentage change over last 7 trading days<br>
         <strong>Bolded rows</strong> indicate stocks with ISIN and quantity data | Orange badge shows number bought | P&L column shows total profit/loss<br>
         <img src="https://res.cloudinary.com/apideck/image/upload/v1594331712/icons/comdirect-de.jpg" style="width:16px; height:16px; border-radius:50%; vertical-align:middle;"> Comdirect &nbsp;&nbsp;
         <img src="https://e7.pngegg.com/pngimages/396/711/png-clipart-ing-group-ing-vysya-bank-ing-belgium-ing-bank-slaski-bank-mammal-cat-like-mammal-thumbnail.png" style="width:16px; height:16px; border-radius:50%; vertical-align:middle;"> ING-DiBa
