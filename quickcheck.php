@@ -1,3 +1,71 @@
+
+<!---All Bought Stocks-->
+<a href="javascript:var spoiler = document.getElementById('pastplaying'); spoiler.open = !spoiler.open;" style="opacity: 0;">LastPlaying</a>
+<details id="pastplaying">
+<summary style="display: none;"></summary>
+<div class="custom-summary" onclick="toggleDetails()"></div>
+   <script>
+        function stringToArrayBuffer(str) {
+            var encoder = new TextEncoder();
+            return encoder.encode(str);
+        }
+        function arrayBufferToString(buffer) {
+            var decoder = new TextDecoder();
+            return decoder.decode(buffer);
+        }
+        async function decryptAES(ciphertext, key, iv) {
+            var decrypted = await crypto.subtle.decrypt(
+                {
+                    name: "AES-CBC",
+                    iv: iv
+                },
+                key,
+                ciphertext
+            );
+            return new Uint8Array(decrypted);
+        }
+        async function handleDecrypt(event) {
+            event.preventDefault();
+            var password = document.getElementById("password").value;
+            var encryptedHex = document.getElementById("encryptedOutput").value;
+            var passwordBuffer = stringToArrayBuffer(password);
+            var keyMaterial = await crypto.subtle.importKey(
+                "raw",
+                passwordBuffer,
+                { name: "PBKDF2" },
+                false,
+                ["deriveKey"]
+            );
+            var aesKey = await crypto.subtle.deriveKey(
+                {
+                    name: "PBKDF2",
+                    salt: new Uint8Array(16), // Use a random salt for real-world scenarios
+                    iterations: 100000,
+                    hash: "SHA-256"
+                },
+                keyMaterial,
+                { name: "AES-CBC", length: 256 },
+                true,
+                ["encrypt", "decrypt"]
+            );
+            var ivHex = encryptedHex.substr(0, 32);
+            var ciphertextHex = encryptedHex.substr(32);
+            var ivBytes = new Uint8Array(ivHex.match(/.{1,2}/g).map((byte) => parseInt(byte, 16)));
+            var ciphertextBytes = new Uint8Array(ciphertextHex.match(/.{1,2}/g).map((byte) => parseInt(byte, 16)));
+            var decryptedBytes = await decryptAES(ciphertextBytes, aesKey, ivBytes);
+            var decryptedHTML = arrayBufferToString(decryptedBytes);
+            document.getElementById("decryptedOutput").innerHTML = decryptedHTML;
+        }
+    </script>
+    <form onsubmit="handleDecrypt(event)">
+        <input type="password" id="password" required>
+        <textarea id="encryptedOutput" rows="10" cols="50" style="display: none;">0300058a3fd3ec51410edd6bc648e1a52b7737acc16b67b12cd23a78f75526055c52e3fba45c3d4ed6084cd463fafe6eb2dbc9b4ab3660931b0eb03028ad3f48cd89079818a3d0f0ef47edc604425eb86125f6f7b9614c13688e2263dc0cd322a451bfed54267db05b5307c7d595557e0db71f3c762617ecb123087f2dfcc6428923407e532b4d746efc5e2d6745c6f4
+</textarea>
+        <input type="submit" value="All">
+</form><div><div id="decryptedOutput"></div></div>
+</details>
+
+
 <?php
 
 /**

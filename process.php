@@ -14,6 +14,33 @@
                 $("#stocklist").html("<p>Navigation failed to load. Please check console for errors.</p>");
             });
     });
+    
+    // Function to generate sparkline SVG
+    function generateSparkline(data, trend) {
+        if (!data || data.length < 2) {
+            return '<span style="color:#999; font-size:11px;">no data</span>';
+        }
+        
+        const min = Math.min(...data);
+        const max = Math.max(...data);
+        const range = max - min || 1;
+        const height = 30;
+        const width = 100;
+        const step = width / (data.length - 1);
+        
+        const points = [];
+        for (let i = 0; i < data.length; i++) {
+            const x = i * step;
+            const y = height - ((data[i] - min) / range * height);
+            points.push(`${x},${y}`);
+        }
+        
+        const color = trend === 'up' ? '#28a745' : (trend === 'down' ? '#dc3545' : '#6c757d');
+        
+        return `<svg width="100" height="30" style="display:inline-block; vertical-align:middle;">
+                    <polyline points="${points.join(' ')}" fill="none" stroke="${color}" stroke-width="2"/>
+                </svg>`;
+    }
     </script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -231,6 +258,21 @@
             color: #28a745;
             margin-left: 8px;
         }
+        .trend-container {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-top: 5px;
+            flex-wrap: wrap;
+        }
+        .trend-up { color: #28a745; }
+        .trend-down { color: #dc3545; }
+        .trend-flat { color: #6c757d; }
+        .spark-wrapper {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
     </style>
 </head>
 <body>
@@ -278,37 +320,19 @@
     }
 
     function fetchExchangeInfoForGoogle($symbol) {
-        // If the symbol has a suffix (.DE, .PA, .L, .T, .HK etc.)
-        // derive the Google Finance exchange code directly from it 
-        // no API call needed, no hardcoded list for every country.
         if (preg_match('/\.([A-Z]+)$/i', $symbol, $m)) {
             $suffixMap = [
-                'DE' => 'ETR',  // XETRA
-                'PA' => 'EPA',  // Euronext Paris
-                'L'  => 'LON',  // London
-                'T'  => 'TYO',  // Tokyo
-                'HK' => 'HKG',  // Hong Kong
-                'AS' => 'AMS',  // Amsterdam
-                'BR' => 'EBR',  // Brussels
-                'MC' => 'BME',  // Madrid
-                'MI' => 'BIT',  // Milan
-                'ST' => 'STO',  // Stockholm
-                'OL' => 'OTCMKTS', // Oslo (no Google Finance code)
-                'TO' => 'TSE',  // Toronto
-                'AX' => 'ASX',  // Australia
-                'BO' => 'BOM',  // Bombay
-                'NS' => 'NSE',  // NSE India
-                'SW' => 'SWX',  // Swiss
-                'SZ' => 'SHE',  // Shenzhen
-                'SS' => 'SHA',  // Shanghai
+                'DE' => 'ETR', 'PA' => 'EPA', 'L'  => 'LON', 'T'  => 'TYO',
+                'HK' => 'HKG', 'AS' => 'AMS', 'BR' => 'EBR', 'MC' => 'BME',
+                'MI' => 'BIT', 'ST' => 'STO', 'OL' => 'OTCMKTS', 'TO' => 'TSE',
+                'AX' => 'ASX', 'BO' => 'BOM', 'NS' => 'NSE', 'SW' => 'SWX',
+                'SZ' => 'SHE', 'SS' => 'SHA',
             ];
             $suffix = strtoupper($m[1]);
             $code   = $suffixMap[$suffix] ?? $suffix;
             return ['display' => $code, 'code' => $code];
         }
 
-        // No suffix = US stock; look up via Yahoo search to distinguish
-        // NYSE / NASDAQ / AMEX / OTC
         $response    = curl_get_search("https://query1.finance.yahoo.com/v1/finance/search?q=" . urlencode($symbol) . "&quotesCount=5&newsCount=0");
         $rawExchange = 'NMS';
 
@@ -323,20 +347,47 @@
         }
 
         $usMap = [
-            'NMS' => 'NASDAQ', 
-            'NGM' => 'NASDAQ', 
-            'NCM' => 'NASDAQ',
+            'NMS' => 'NASDAQ', 'NGM' => 'NASDAQ', 'NCM' => 'NASDAQ',
             'NYQ' => 'NYSE',   'NYM' => 'NYSE',
             'ASE' => 'AMEX',
-            'PNK' => 'OTCMKTS',
-            'OQB' => 'OTCMKTS',
-            'OQX' => 'OTCMKTS',
+            'PNK' => 'OTCMKTS', 'OQB' => 'OTCMKTS', 'OQX' => 'OTCMKTS',
         ];
         $code = $usMap[$rawExchange] ?? $rawExchange;
         return ['display' => $code, 'code' => $code];
     }
 
-    // Search Yahoo Finance for a company name, return best EQUITY match
+    // New function to fetch 7-day sparkline data
+    function fetchSparklineData($symbol) {
+        $url = "https://query1.finance.yahoo.com/v8/finance/chart/" . urlencode($symbol) . "?range=7d&interval=1d";
+        $response = curl_get_search($url);
+        
+        if (!$response) return null;
+        
+        $data = json_decode($response, true);
+        if (!isset($data['chart']['result'][0])) return null;
+        
+        $result = $data['chart']['result'][0];
+        $closes = $result['indicators']['quote'][0]['close'] ?? [];
+        $validCloses = array_values(array_filter($closes, function($v) { return $v !== null; }));
+        
+        if (count($validCloses) >= 2) {
+            $oldPrice = $validCloses[0];
+            $newPrice = $validCloses[count($validCloses) - 1];
+            $sevenDayChange = $newPrice - $oldPrice;
+            $sevenDayChangePct = ($sevenDayChange / $oldPrice) * 100;
+            $trend = $sevenDayChange > 0 ? 'up' : ($sevenDayChange < 0 ? 'down' : 'flat');
+            
+            return [
+                'sparkline' => $validCloses,
+                'trend' => $trend,
+                'seven_day_change' => $sevenDayChange,
+                'seven_day_change_pct' => $sevenDayChangePct
+            ];
+        }
+        
+        return null;
+    }
+
     function searchSymbol($query) {
         $searchUrl = "https://query1.finance.yahoo.com/v1/finance/search?q=" . urlencode($query) . "&quotesCount=5&newsCount=0";
         $response  = curl_get_search($searchUrl);
@@ -353,7 +404,6 @@
                         ];
                     }
                 }
-                // Fallback: first result even if not EQUITY
                 return [
                     'symbol'   => $data['quotes'][0]['symbol'],
                     'name'     => $data['quotes'][0]['longname'] ?? $data['quotes'][0]['shortname'] ?? $data['quotes'][0]['symbol'],
@@ -369,9 +419,9 @@
 
     $currencySymbols = [
         'USD' => ['symbol' => '$',  'rate' => 1,     'code' => 'USD'],
-        'EUR' => ['symbol' => '',  'rate' => 0.92,  'code' => 'EUR'],
-        'JPY' => ['symbol' => '',  'rate' => 148.5, 'code' => 'JPY'],
-        'GBP' => ['symbol' => '',  'rate' => 0.79,  'code' => 'GBP']
+        'EUR' => ['symbol' => '€',  'rate' => 0.92,  'code' => 'EUR'],
+        'JPY' => ['symbol' => '¥',  'rate' => 148.5, 'code' => 'JPY'],
+        'GBP' => ['symbol' => '£',  'rate' => 0.79,  'code' => 'GBP']
     ];
 
     $targetCurrency = $currencySymbols[$currencyParam] ?? $currencySymbols['USD'];
@@ -379,7 +429,6 @@
     $targetRate     = $targetCurrency['rate'];
     $targetCode     = $targetCurrency['code'];
 
-    // Live exchange rates
     $rateResponse = curl_get_search("https://api.exchangerate-api.com/v4/latest/USD");
     if ($rateResponse) {
         $rateData = json_decode($rateResponse, true);
@@ -419,8 +468,8 @@
             $wasSearch = false;
         }
 
-        // Fetch live price
-        $url = "https://query1.finance.yahoo.com/v8/finance/chart/" . urlencode($symbol);
+        // Fetch live price with 7-day data for sparkline
+        $url = "https://query1.finance.yahoo.com/v8/finance/chart/" . urlencode($symbol) . "?range=7d&interval=1d";
         $ch  = curl_init();
         curl_setopt($ch, CURLOPT_URL, $url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
@@ -443,14 +492,31 @@
                 $previousClose        = isset($meta['previousClose'])      ? $meta['previousClose']      : null;
                 $originalCurrencyCode = isset($meta['currency'])           ? strtoupper($meta['currency']) : 'USD';
 
-                // Rate to go from the stock's local currency to USD.
-                // $rateData['rates'] is relative to USD (e.g. JPY=>150 means 1 USD = 150 JPY).
+                // Get sparkline data from the same response
+                $closes = $result['indicators']['quote'][0]['close'] ?? [];
+                $validCloses = array_values(array_filter($closes, function($v) { return $v !== null; }));
+                
+                $sevenDayChange = null;
+                $sevenDayChangePct = null;
+                $trend = 'flat';
+                $sparklineData = [];
+                
+                if (count($validCloses) >= 2) {
+                    $oldPrice = $validCloses[0];
+                    $newPrice = $validCloses[count($validCloses) - 1];
+                    if ($oldPrice > 0) {
+                        $sevenDayChange = $newPrice - $oldPrice;
+                        $sevenDayChangePct = ($sevenDayChange / $oldPrice) * 100;
+                        $trend = $sevenDayChange > 0 ? 'up' : ($sevenDayChange < 0 ? 'down' : 'flat');
+                    }
+                    $sparklineData = $validCloses;
+                }
+
                 $localToUsdRate = 1.0;
                 if ($originalCurrencyCode !== 'USD' && isset($rateData['rates'][$originalCurrencyCode]) && $rateData['rates'][$originalCurrencyCode] > 0) {
                     $localToUsdRate = 1.0 / $rateData['rates'][$originalCurrencyCode];
                 }
 
-                // Full conversion: local currency -> USD -> display currency
                 $convertedPrice = 'N/A';
                 if ($originalPrice !== 'N/A' && is_numeric($originalPrice)) {
                     $convertedPrice = $originalPrice * $localToUsdRate * $targetRate;
@@ -461,9 +527,9 @@
                 $changeSign         = '';
                 $changePercentSign  = '';
                 if ($originalPrice !== 'N/A' && $previousClose && is_numeric($originalPrice) && is_numeric($previousClose)) {
-                    $changeVal         = $originalPrice - $previousClose;             // in local currency
+                    $changeVal         = $originalPrice - $previousClose;
                     $changePercentVal  = ($changeVal / $previousClose) * 100;
-                    $changeConverted   = $changeVal * $localToUsdRate * $targetRate;  // local -> USD -> target
+                    $changeConverted   = $changeVal * $localToUsdRate * $targetRate;
                     $changeDisplay     = number_format($changeConverted, 2);
                     $changePercent     = number_format($changePercentVal, 2);
                     $changeSign        = ($changeConverted >= 0) ? '+' : '';
@@ -474,7 +540,7 @@
                 $exchangeName = isset($meta['exchangeName']) ? $meta['exchangeName'] : 'N/A';
                 $displayName         = ($wasSearch && $companyName) ? $companyName : $fetchedName;
 
-                // -- Google Finance link (matches portfolio page logic) ----------
+                // -- Google Finance link ------------------------------------------
                 $googleSymbol  = preg_replace('/\.[A-Z]{2,}$/i', '', $symbol);
                 $exchangeInfo  = fetchExchangeInfoForGoogle($symbol);
                 $exchangeCode  = $exchangeInfo['code'];
@@ -521,11 +587,36 @@
                     echo '<div class="price-usd">(Original: ' . $originalCurrencyCode . ' ' . number_format((float)$originalPrice, 2) . ' @ 1 ' . $originalCurrencyCode . ' = ' . number_format($localToTargetRate, 4) . ' ' . $targetCode . ')</div>';
                 }
                 echo '<div class="info">';
-                echo 'Change: ' . ($changeDisplay != 'N/A' ? $changeSign . $changeDisplay : 'N/A');
+                echo 'Daily Change: ' . ($changeDisplay != 'N/A' ? $changeSign . $changeDisplay : 'N/A');
                 if ($changePercent != 'N/A') {
                     echo ' (' . $changePercentSign . $changePercent . '%)';
                 }
                 echo '</div>';
+                
+                // Add 7-Day Trend with Sparkline
+                if (!empty($sparklineData)) {
+                    $trendText = $trend === 'up' ? '📈 UP' : ($trend === 'down' ? '📉 DOWN' : '➡️ FLAT');
+                    $trendClass = $trend === 'up' ? 'trend-up' : ($trend === 'down' ? 'trend-down' : 'trend-flat');
+                    $change7dSign = $sevenDayChange > 0 ? '+' : '';
+                    
+                    echo '<div class="trend-container">';
+                    echo '<div class="spark-wrapper" id="sparkline-container"></div>';
+                    echo '<span class="info" style="margin-top:0;">7-Day Change: ' . $change7dSign . '$' . number_format(abs($sevenDayChange), 2) . ' (' . $change7dSign . number_format($sevenDayChangePct, 2) . '%)</span>';
+                    echo '</div>';
+                    
+                    // Pass sparkline data to JavaScript
+                    echo '<script>';
+                    echo 'const sparklineData_' . md5($symbol) . ' = ' . json_encode($sparklineData) . ';';
+                    echo 'const sparklineTrend_' . md5($symbol) . ' = "' . $trend . '";';
+                    echo 'const container = document.querySelector("#sparkline-container");';
+                    echo 'if(container && typeof generateSparkline === "function") {';
+                    echo '  container.innerHTML = generateSparkline(sparklineData_' . md5($symbol) . ', sparklineTrend_' . md5($symbol) . ');';
+                    echo '}';
+                    echo '</script>';
+                } else {
+                    echo '<div class="info">7-Day Trend: No data available</div>';
+                }
+                
                 echo '<div class="info">Exchange: ' . htmlspecialchars($exchangeName) . '</div>';
 
                 $saveUrl = 'save.php?stock=' . urlencode($symbol) .
@@ -569,7 +660,8 @@
     ?>
     
     <footer>
-        &#9889; Live data from Yahoo Finance API &bull; Search by company name OR symbol &bull; &#128154; Google Finance "G" link next to each symbol
+        &#9889; Live data from Yahoo Finance API &bull; Search by company name OR symbol &bull; &#128154; Google Finance "G" link next to each symbol<br>
+        📊 <strong>Sparklines show 7-day price trend</strong> (📈 green = up, 📉 red = down, ➡️ gray = flat)
     </footer>
 </div>
 

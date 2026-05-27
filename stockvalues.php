@@ -281,7 +281,7 @@ $(document).ready(function(){
         $rateUrl = "https://api.exchangerate-api.com/v4/latest/USD";
         $response = curl_get($rateUrl);
         
-        $defaultRates = ['USD' => 1, 'EUR' => 0.92, 'JPY' => 148.5, 'GBP' => 0.79];
+        $defaultRates = ['USD' => 1, 'EUR' => 0.92, 'JPY' => 148.5, 'GBP' => 0.79, 'HKD' => 7.82];
         
         if ($response) {
             $data = json_decode($response, true);
@@ -290,7 +290,8 @@ $(document).ready(function(){
                     'USD' => 1,
                     'EUR' => $data['rates']['EUR'] ?? 0.92,
                     'JPY' => $data['rates']['JPY'] ?? 148.5,
-                    'GBP' => $data['rates']['GBP'] ?? 0.79
+                    'GBP' => $data['rates']['GBP'] ?? 0.79,
+                    'HKD' => $data['rates']['HKD'] ?? 7.82
                 ];
             }
         }
@@ -304,10 +305,18 @@ $(document).ready(function(){
             'EUR' => ['symbol' => '€', 'code' => 'EUR'],
             '€' => ['symbol' => '€', 'code' => 'EUR'],
             'JPY' => ['symbol' => '¥', 'code' => 'JPY'],
-            '¥' => ['symbol' => '¥', 'code' => 'JPY'],
             'GBP' => ['symbol' => '£', 'code' => 'GBP'],
-            '£' => ['symbol' => '£', 'code' => 'GBP']
+            '£' => ['symbol' => '£', 'code' => 'GBP'],
+            'HKD' => ['symbol' => 'HK$', 'code' => 'HKD'],
+            'HK$' => ['symbol' => 'HK$', 'code' => 'HKD'],
+            'CNY' => ['symbol' => 'CN¥', 'code' => 'CNY']
         ];
+        
+        // Handle ¥ symbol carefully - prefer JPY if not specified
+        if ($currencyCode === '¥') {
+            return ['symbol' => '¥', 'code' => 'JPY'];
+        }
+        
         return $currencies[$currencyCode] ?? ['symbol' => '$', 'code' => 'USD'];
     }
     
@@ -328,29 +337,51 @@ $(document).ready(function(){
         if ($code == 'JPY') {
             return $symbol . number_format($amount, 0);
         }
+        if ($code == 'HKD') {
+            return $symbol . number_format($amount, 2);
+        }
         return $symbol . number_format($amount, 2);
     }
     
-    function getLivePriceUSD($symbol, $exchangeRates) {
+    // NEW: Get live price with original currency info
+    function getLivePriceWithCurrency($symbol, $exchangeRates) {
         $url = "https://query1.finance.yahoo.com/v8/finance/chart/" . urlencode($symbol);
         $response = curl_get($url);
         
         if ($response) {
             $data = json_decode($response, true);
             if (isset($data['chart']['result'][0]['meta']['regularMarketPrice'])) {
-                $price    = $data['chart']['result'][0]['meta']['regularMarketPrice'];
+                $price = $data['chart']['result'][0]['meta']['regularMarketPrice'];
                 $currency = strtoupper($data['chart']['result'][0]['meta']['currency'] ?? 'USD');
-                // Convert local-currency price to USD
+                
+                // Convert to USD for consistent comparison
+                $priceUSD = $price;
                 if ($currency !== 'USD' && isset($exchangeRates[$currency]) && $exchangeRates[$currency] > 0) {
-                    $price = $price / $exchangeRates[$currency];
+                    $priceUSD = $price / $exchangeRates[$currency];
+                } elseif ($currency !== 'USD' && !isset($exchangeRates[$currency])) {
+                    // Unknown currency - log and default to USD
+                    error_log("Unknown currency: $currency for symbol $symbol");
+                    $priceUSD = $price;
+                    $currency = 'USD';
                 }
-                return $price;
+                
+                return [
+                    'price_usd' => $priceUSD,
+                    'original_currency' => $currency,
+                    'original_price' => $price
+                ];
             }
         }
         return null;
     }
     
-    // NEW: Get 7-day trend data for a symbol
+    // Legacy function for backward compatibility
+    function getLivePriceUSD($symbol, $exchangeRates) {
+        $data = getLivePriceWithCurrency($symbol, $exchangeRates);
+        return $data ? $data['price_usd'] : null;
+    }
+    
+    // Get 7-day trend data for a symbol
     function get7DayTrend($symbol, $exchangeRates) {
         $url = "https://query1.finance.yahoo.com/v8/finance/chart/" . urlencode($symbol) . "?range=7d&interval=1d";
         $response = curl_get($url);
@@ -405,6 +436,27 @@ $(document).ready(function(){
     }
     
     function fetchExchangeInfo($symbol) {
+        // First, check for exchange suffix in symbol itself
+        $symbolUpper = strtoupper($symbol);
+        
+        // Direct symbol suffix mapping (most reliable)
+        if (substr($symbolUpper, -3) == '.HK') {
+            return ['display' => 'Hong Kong', 'code' => 'HKG'];
+        }
+        if (substr($symbolUpper, -3) == '.L') {
+            return ['display' => 'London', 'code' => 'LON'];
+        }
+        if (substr($symbolUpper, -3) == '.T' || substr($symbolUpper, -2) == '.T') {
+            return ['display' => 'Tokyo', 'code' => 'TYO'];
+        }
+        if (substr($symbolUpper, -3) == '.DE') {
+            return ['display' => 'XETRA', 'code' => 'FRA'];
+        }
+        if (substr($symbolUpper, -3) == '.MX') {
+            return ['display' => 'Mexico', 'code' => 'MEX'];
+        }
+        
+        // Fallback to API lookup for other symbols
         $url = "https://query1.finance.yahoo.com/v1/finance/search?q=" . urlencode($symbol) . "&quotesCount=5&newsCount=0";
         $response = curl_get($url);
         
@@ -428,10 +480,17 @@ $(document).ready(function(){
                             'LON' => 'LON',
                             'FRA' => 'FRA',
                             'HKG' => 'HKG',
-                            'MEX' => 'MEX'
+                            'MEX' => 'MEX',
+                            'HKE' => 'HKG',
                         ];
                         
                         $exchangeCode = $exchangeMap[$rawExchange] ?? $rawExchange;
+                        
+                        // Clean up display name for Hong Kong
+                        if (strpos($exchangeDisplay, 'Hong Kong') !== false || $exchangeCode == 'HKG') {
+                            $exchangeDisplay = 'Hong Kong';
+                            $exchangeCode = 'HKG';
+                        }
                         break;
                     }
                 }
@@ -499,11 +558,17 @@ $(document).ready(function(){
     
     $uniqueSymbols = array_unique(array_column($stocks, 'stock'));
     $livePricesUSD = [];
+    $liveOriginalCurrencies = [];
+    $liveOriginalPrices = [];
     $sevenDayTrends = [];
     
     foreach ($uniqueSymbols as $symbol) {
-        $price = getLivePriceUSD($symbol, $exchangeRates);
-        if ($price) $livePricesUSD[$symbol] = $price;
+        $priceData = getLivePriceWithCurrency($symbol, $exchangeRates);
+        if ($priceData) {
+            $livePricesUSD[$symbol] = $priceData['price_usd'];
+            $liveOriginalCurrencies[$symbol] = $priceData['original_currency'];
+            $liveOriginalPrices[$symbol] = $priceData['original_price'];
+        }
         
         // Fetch 7-day trend for each symbol
         $trend = get7DayTrend($symbol, $exchangeRates);
@@ -557,6 +622,19 @@ $(document).ready(function(){
     usort($losers, function($a, $b) {
         return $a['diff_percent'] <=> $b['diff_percent'];
     });
+    
+    // Market to code mapping for Google Finance links
+    $marketToCode = [
+        'OTC Markets' => 'OTCMKTS',
+        'NASDAQ' => 'NASDAQ',
+        'NYSE' => 'NYSE',
+        'Tokyo' => 'TYO',
+        'London' => 'LON',
+        'XETRA' => 'FRA',
+        'Hong Kong' => 'HKG',
+        'HongKong' => 'HKG',
+        'Mexico' => 'MEX'
+    ];
     ?>
     
     <div class="highlights">
@@ -639,6 +717,8 @@ $(document).ready(function(){
                     $savedPrice = $stock['price'];
                     $savedCurrency = $stock['currency'];
                     $livePriceUSD = isset($livePricesUSD[$symbol]) ? $livePricesUSD[$symbol] : null;
+                    $liveOriginalCurrency = isset($liveOriginalCurrencies[$symbol]) ? $liveOriginalCurrencies[$symbol] : null;
+                    $liveOriginalPrice = isset($liveOriginalPrices[$symbol]) ? $liveOriginalPrices[$symbol] : null;
                     $livePriceConverted = null;
                     $diff = null;
                     $diffClass = '';
@@ -666,17 +746,6 @@ $(document).ready(function(){
                         $exchangeCode = $exchangeInfo['code'];
                     } else {
                         $exchangeDisplay = $exchangeMarket;
-                        
-                        $marketToCode = [
-                            'OTC Markets' => 'OTCMKTS',
-                            'NASDAQ' => 'NASDAQ',
-                            'NYSE' => 'NYSE',
-                            'Tokyo' => 'TYO',
-                            'London' => 'LON',
-                            'XETRA' => 'FRA',
-                            'Hong Kong' => 'HKG',
-                            'Mexico' => 'MEX'
-                        ];
                         
                         if (isset($marketToCode[$exchangeMarket])) {
                             $exchangeCode = $marketToCode[$exchangeMarket];
@@ -759,7 +828,16 @@ $(document).ready(function(){
                     <td class="<?php echo $diffClass; ?>" style="vertical-align: middle;">
                         <?php if ($livePriceConverted !== null): ?>
                             <?php echo formatCurrency($livePriceConverted, $savedCurrency, $exchangeRates); ?>
-                            <span class="saved-original">(USD $<?php echo number_format($livePriceUSD, 2); ?>)</span>
+                            <span class="saved-original">
+                                <?php 
+                                if ($liveOriginalCurrency && $liveOriginalPrice) {
+                                    $origSymbol = getCurrencyInfo($liveOriginalCurrency)['symbol'];
+                                    echo '(' . $liveOriginalCurrency . ' ' . $origSymbol . number_format($liveOriginalPrice, 2) . ')';
+                                } else {
+                                    echo '(USD $' . number_format($livePriceUSD, 2) . ')';
+                                }
+                                ?>
+                            </span>
                         <?php else: ?>
                             <span class="price-neutral">N/A</span>
                         <?php endif; ?>
@@ -825,7 +903,7 @@ $(document).ready(function(){
                             
                             <button class="delete-btn" onclick="if(confirm('Delete <?php echo htmlspecialchars($symbol); ?>?')) window.location.href='save.php?del=yes&handle=<?php echo urlencode($symbol); ?>'">X</button>
                         </div>
-                    </tr>
+                    </td>
                 </tr>
                 <?php endforeach; ?>
                 </tbody>
