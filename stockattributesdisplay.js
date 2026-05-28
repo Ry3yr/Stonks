@@ -15,7 +15,7 @@ function loadStockAttributes() {
         });
 }
 
-// Function to add indicators to the stock table
+// Function to add indicators to the stock table (fully dynamic)
 function addIndicatorsToTable(attributes) {
     $('#stockTable tbody tr').each(function() {
         const $row = $(this);
@@ -44,22 +44,14 @@ function addIndicatorsToTable(attributes) {
             const attrs = attributes[cleanSymbol];
             let indicators = [];
             
-            // Add cyclic indicator if present
+            // Add cyclic indicator if present – dynamic: no hardcoded mapping
             if (attrs.cyclic) {
-                let cyclicText = '';
-                switch(attrs.cyclic) {
-                    case 'quarterly':
-                        cyclicText = 'quarterly';
-                        break;
-                    case 'halfyearly':
-                        cyclicText = 'half-yearly';
-                        break;
-                    case 'yearly':
-                        cyclicText = 'yearly';
-                        break;
-                    default:
-                        cyclicText = attrs.cyclic;
-                }
+                // Optional: pretty formatting (first letter uppercase, replace underscores)
+                let cyclicText = attrs.cyclic.replace(/_/g, ' ');
+                cyclicText = cyclicText.charAt(0).toUpperCase() + cyclicText.slice(1);
+                // Special case for 'halfyearly' -> 'Half-yearly'
+                if (cyclicText.toLowerCase() === 'Halfyearly') cyclicText = 'Halfyearly';
+                
                 indicators.push(`<span class="attr-badge cyclic-badge">${cyclicText}</span>`);
             }
             

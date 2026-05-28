@@ -22,8 +22,9 @@ function cleanStockSymbol($symbol) {
     return $symbol;
 }
 
-// Reverse the order of appearance (last item becomes first)
-$stocks = array_reverse($stocks);
+// Keep original order for saving, use reversed for display
+$originalStocks = $stocks;
+$displayStocks = array_reverse($originalStocks);
 
 // Load existing attributes
 $attributes = [];
@@ -37,16 +38,25 @@ if (file_exists($attributesFile)) {
 // Process form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_attributes'])) {
     $newAttributes = [];
+    $updatedStocks = $originalStocks; // start with original data
     
-    // Loop through all stocks
-    foreach ($stocks as $stock) {
+    // Loop through all stocks (using original order for reliable mapping)
+    foreach ($originalStocks as $index => $stock) {
         $stockName = $stock['stock'];
         $cleanName = cleanStockSymbol($stockName);
         
-        // Initialize array for this stock
+        // --- Update exchange market if provided ---
+        if (isset($_POST['exchange_' . $stockName])) {
+            $newExchange = trim($_POST['exchange_' . $stockName]);
+            if ($newExchange !== '') {
+                $updatedStocks[$index]['exchange_market'] = $newExchange;
+            }
+        }
+        
+        // --- Cyclic & volatile attributes ---
         $stockAttrs = [];
         
-        // Handle cyclic setting
+        // Cyclic setting (including 'memestock')
         if (isset($_POST['cyclic_' . $cleanName])) {
             $cyclicValue = $_POST['cyclic_' . $cleanName];
             if ($cyclicValue !== 'none') {
@@ -54,7 +64,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_attributes'])) {
             }
         }
         
-        // Handle volatile setting
+        // Volatile setting
         if (isset($_POST['volatile_' . $cleanName])) {
             $volatileValue = $_POST['volatile_' . $cleanName];
             if ($volatileValue !== 'none') {
@@ -62,17 +72,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_attributes'])) {
             }
         }
         
-        // Only add stock if it has at least one attribute
         if (!empty($stockAttrs)) {
             $newAttributes[$cleanName] = $stockAttrs;
         }
     }
     
-    // Save to stockattributes.json
+    // Save updated stocks.json
+    file_put_contents($stocksFile, json_encode($updatedStocks, JSON_PRETTY_PRINT));
+    
+    // Save stockattributes.json
     file_put_contents($attributesFile, json_encode($newAttributes, JSON_PRETTY_PRINT));
+    
+    // Reload data for display
+    $originalStocks = $updatedStocks;
+    $displayStocks = array_reverse($originalStocks);
     $attributes = $newAttributes;
     
-    echo "<p style='color: green; font-weight: bold;'>? Attributes saved successfully!</p>";
+    echo "<p style='color: green; font-weight: bold;'>✓ Attributes and exchange markets saved successfully!</p>";
 }
 ?>
 
@@ -84,7 +100,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_attributes'])) {
 </head>
 <body>
     <h1>Stock Attributes Manager</h1>
-    <p>Configure cyclic and volatility settings for each stock</p>
+    <p>Configure cyclic (including <strong>memestock</strong>), volatility, and <strong>exchange market</strong> for each stock.</p>
     <p><u>Underlined stocks</u> have an ISIN field.</p>
     
     <form method="POST" action="">
@@ -96,19 +112,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_attributes'])) {
                     <th>Price</th>
                     <th>Currency</th>
                     <th>Date</th>
-                    <th>Exchange Market</th>
+                    <th>Exchange Market <br> (editable)</th>
                     <th>Cyclic Setting</th>
                     <th>Volatile</th>
                 </tr>
             </thead>
             <tbody>
-                <?php foreach ($stocks as $stock): ?>
+                <?php foreach ($displayStocks as $stock): ?>
                     <?php 
                     $stockName = $stock['stock'];
                     $cleanName = cleanStockSymbol($stockName);
                     $currentCyclic = isset($attributes[$cleanName]['cyclic']) ? $attributes[$cleanName]['cyclic'] : '';
                     $currentVolatile = isset($attributes[$cleanName]['volatile']) ? $attributes[$cleanName]['volatile'] : '';
                     $hasIsin = isset($stock['isin']) && !empty($stock['isin']);
+                    $currentExchange = htmlspecialchars($stock['exchange_market']);
                     ?>
                     <tr>
                         <td>
@@ -122,13 +139,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_attributes'])) {
                         <td><?php echo htmlspecialchars($stock['price']); ?></td>
                         <td><?php echo htmlspecialchars($stock['currency']); ?></td>
                         <td><?php echo htmlspecialchars($stock['date']); ?></td>
-                        <td><?php echo htmlspecialchars($stock['exchange_market']); ?></td>
+                        <td>
+                            <input type="text" name="exchange_<?php echo htmlspecialchars($stockName); ?>" 
+                                   value="<?php echo $currentExchange; ?>" size="15">
+                        </td>
                         <td>
                             <select name="cyclic_<?php echo htmlspecialchars($cleanName); ?>">
                                 <option value="none" <?php echo $currentCyclic == '' ? 'selected' : ''; ?>>-- None --</option>
                                 <option value="quarterly" <?php echo $currentCyclic == 'quarterly' ? 'selected' : ''; ?>>Quarterly</option>
                                 <option value="halfyearly" <?php echo $currentCyclic == 'halfyearly' ? 'selected' : ''; ?>>Half-Yearly</option>
                                 <option value="yearly" <?php echo $currentCyclic == 'yearly' ? 'selected' : ''; ?>>Yearly</option>
+                                <option value="memestock" <?php echo $currentCyclic == 'memestock' ? 'selected' : ''; ?>>Memestock</option>
                             </select>
                         </td>
                         <td>
@@ -145,7 +166,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_attributes'])) {
         </table>
         
         <br>
-        <input type="submit" name="save_attributes" value="Save Attributes">
+        <input type="submit" name="save_attributes" value="Save Attributes & Exchange Markets">
     </form>
     
     <hr>

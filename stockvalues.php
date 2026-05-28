@@ -24,232 +24,57 @@ $(document).ready(function(){
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Stock Portfolio - Live Values</title>
     <style>
+        /* your existing CSS (unchanged) */
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: Arial, sans-serif;
-            background: #f0f2f5;
-            padding: 20px;
-        }
-        .container {
-            max-width: 1400px;
-            margin: 0 auto;
-        }
+        body { font-family: Arial, sans-serif; background: #f0f2f5; padding: 20px; }
+        .container { max-width: 1400px; margin: 0 auto; }
         h1 { margin-bottom: 10px; color: #1a1a2e; }
         .sub { color: #666; margin-bottom: 20px; }
-        
-        .highlights {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-            margin-bottom: 30px;
-        }
-        .winners-box, .losers-box {
-            background: white;
-            border-radius: 10px;
-            padding: 20px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-        }
+        .highlights { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px; }
+        .winners-box, .losers-box { background: white; border-radius: 10px; padding: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
         .winners-box h2 { color: #28a745; border-bottom: 2px solid #28a745; padding-bottom: 10px; margin-bottom: 15px; }
         .losers-box h2 { color: #dc3545; border-bottom: 2px solid #dc3545; padding-bottom: 10px; margin-bottom: 15px; }
-        .winner-item, .loser-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 10px;
-            border-bottom: 1px solid #eee;
-        }
+        .winner-item, .loser-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid #eee; }
         .winner-change { color: #28a745; font-weight: bold; }
         .loser-change { color: #dc3545; font-weight: bold; }
         .no-data { color: #666; text-align: center; padding: 20px; }
-        
-        .all-stocks {
-            background: white;
-            border-radius: 10px;
-            padding: 20px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-            overflow-x: auto;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-        th, td {
-            padding: 12px;
-            text-align: left;
-            border-bottom: 1px solid #eee;
-        }
-        th {
-            background: #f8f9fa;
-            font-weight: bold;
-        }
+        .all-stocks { background: white; border-radius: 10px; padding: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #eee; }
+        th { background: #f8f9fa; font-weight: bold; }
         .price-up { color: #28a745; font-weight: bold; }
         .price-down { color: #dc3545; font-weight: bold; }
         .price-neutral { color: #666; }
-        .google-link {
-            background: #4285f4;
-            color: white;
-            padding: 4px 10px;
-            border-radius: 4px;
-            text-decoration: none;
-            font-size: 12px;
-            display: inline-block;
-        }
+        .google-link { background: #4285f4; color: white; padding: 4px 10px; border-radius: 4px; text-decoration: none; font-size: 12px; display: inline-block; }
         .google-link:hover { background: #3367d6; }
-        
-        .gray-buy-link {
-            background: #6c757d;
-            color: white;
-            padding: 4px 10px;
-            border-radius: 4px;
-            text-decoration: none;
-            font-size: 12px;
-            display: inline-block;
-            margin-left: 5px;
-        }
-        .gray-buy-link:hover {
-            background: #5a6268;
-        }
-        
-        .delete-btn {
-            background: #dc3545;
-            color: white;
-            border: none;
-            padding: 4px 8px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 12px;
-            font-weight: bold;
-        }
+        .gray-buy-link { background: #6c757d; color: white; padding: 4px 10px; border-radius: 4px; text-decoration: none; font-size: 12px; display: inline-block; margin-left: 5px; }
+        .gray-buy-link:hover { background: #5a6268; }
+        .delete-btn { background: #dc3545; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold; }
         .delete-btn:hover { background: #c82333; }
-        .commit-btn {
-            background: #28a745;
-            color: white;
-            border: none;
-            padding: 4px 8px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 10px;
-            margin-left: 5px;
-        }
+        .commit-btn { background: #28a745; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 10px; margin-left: 5px; }
         .commit-btn:hover { background: #1e7e34; }
-        .commit-btn:disabled {
-            background: #6c757d;
-            cursor: not-allowed;
-        }
-        .refresh-btn {
-            background: #007bff;
-            color: white;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 5px;
-            cursor: pointer;
-            margin-bottom: 20px;
-        }
+        .commit-btn:disabled { background: #6c757d; cursor: not-allowed; }
+        .refresh-btn { background: #007bff; color: white; border: none; padding: 8px 16px; border-radius: 5px; cursor: pointer; margin-bottom: 20px; }
         .refresh-btn:hover { background: #0056b3; }
-        footer {
-            margin-top: 30px;
-            text-align: center;
-            color: #666;
-            font-size: 12px;
-        }
-        .timestamp {
-            font-size: 11px;
-            color: #999;
-        }
-        .action-cell {
-            white-space: nowrap;
-        }
-        .saved-cell {
-            display: flex;
-            flex-direction: column;
-        }
-        .saved-original {
-            font-size: 10px;
-            color: #999;
-        }
-        .exchange-badge {
-            font-size: 10px;
-            background: #e9ecef;
-            padding: 2px 6px;
-            border-radius: 10px;
-        }
-        .fetching {
-            font-size: 10px;
-            color: #ffc107;
-            margin-left: 5px;
-        }
-        .action-buttons {
-            display: flex;
-            gap: 5px;
-            flex-wrap: wrap;
-        }
-        .stock-name-bold {
-            font-weight: bold;
-            color: #2c3e50;
-        }
-        .stock-with-data {
-            background-color: #fff8e7;
-        }
-        .quantity-badge {
-            background: #ff9800;
-            color: white;
-            font-size: 11px;
-            padding: 2px 8px;
-            border-radius: 20px;
-            margin-left: 8px;
-            display: inline-block;
-        }
-        .pl-positive {
-            color: #28a745;
-            font-weight: bold;
-        }
-        .pl-negative {
-            color: #dc3545;
-            font-weight: bold;
-        }
-        .isin-badge {
-            font-size: 10px;
-            color: #6c757d;
-            margin-left: 8px;
-            font-family: monospace;
-        }
-        .purchase-price {
-            font-size: 11px;
-            color: #856404;
-            background: #fff3cd;
-            padding: 2px 6px;
-            border-radius: 4px;
-            margin-top: 4px;
-            display: inline-block;
-        }
-        .search-btn {
-            background: #17a2b8;
-            color: white;
-            padding: 4px 8px;
-            border-radius: 4px;
-            text-decoration: none;
-            font-size: 11px;
-            display: inline-block;
-        }
-        .search-btn:hover {
-            background: #138496;
-        }
-        .depot-icon {
-            width: 20px;
-            height: 20px;
-            border-radius: 50%;
-            object-fit: cover;
-            margin-left: 6px;
-            vertical-align: middle;
-            display: inline-block;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
-        }
-        .stock-symbol-wrapper {
-            display: flex;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 4px;
-        }
+        footer { margin-top: 30px; text-align: center; color: #666; font-size: 12px; }
+        .timestamp { font-size: 11px; color: #999; }
+        .action-cell { white-space: nowrap; }
+        .saved-cell { display: flex; flex-direction: column; }
+        .saved-original { font-size: 10px; color: #999; }
+        .exchange-badge { font-size: 10px; background: #e9ecef; padding: 2px 6px; border-radius: 10px; }
+        .fetching { font-size: 10px; color: #ffc107; margin-left: 5px; }
+        .action-buttons { display: flex; gap: 5px; flex-wrap: wrap; }
+        .stock-name-bold { font-weight: bold; color: #2c3e50; }
+        .stock-with-data { background-color: #fff8e7; }
+        .quantity-badge { background: #ff9800; color: white; font-size: 11px; padding: 2px 8px; border-radius: 20px; margin-left: 8px; display: inline-block; }
+        .pl-positive { color: #28a745; font-weight: bold; }
+        .pl-negative { color: #dc3545; font-weight: bold; }
+        .isin-badge { font-size: 10px; color: #6c757d; margin-left: 8px; font-family: monospace; }
+        .purchase-price { font-size: 11px; color: #856404; background: #fff3cd; padding: 2px 6px; border-radius: 4px; margin-top: 4px; display: inline-block; }
+        .search-btn { background: #17a2b8; color: white; padding: 4px 8px; border-radius: 4px; text-decoration: none; font-size: 11px; display: inline-block; }
+        .search-btn:hover { background: #138496; }
+        .depot-icon { width: 20px; height: 20px; border-radius: 50%; object-fit: cover; margin-left: 6px; vertical-align: middle; display: inline-block; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+        .stock-symbol-wrapper { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; }
         .trend-up { color: #28a745; font-weight: bold; }
         .trend-down { color: #dc3545; font-weight: bold; }
         .spark-wrapper { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -264,6 +89,25 @@ $(document).ready(function(){
     <button class="refresh-btn" onclick="location.reload()">Refresh Live Prices</button>
     
     <?php
+    // ============================================
+    // CENTRALIZED CONFIGURATION (ADD NEW CURRENCIES HERE)
+    // ============================================
+    $CURRENCY_CONFIG = [
+        'USD' => ['symbol' => '$', 'code' => 'USD', 'decimals' => 2],
+        'EUR' => ['symbol' => '€', 'code' => 'EUR', 'decimals' => 2],
+        'JPY' => ['symbol' => '¥', 'code' => 'JPY', 'decimals' => 0],
+        'GBP' => ['symbol' => '£', 'code' => 'GBP', 'decimals' => 2],
+        'HKD' => ['symbol' => 'HK$', 'code' => 'HKD', 'decimals' => 2],
+        'CNY' => ['symbol' => 'CN¥', 'code' => 'CNY', 'decimals' => 2],
+        'SEK' => ['symbol' => 'kr', 'code' => 'SEK', 'decimals' => 2],   // <-- ADDED
+        'MXN' => ['symbol' => 'MX$', 'code' => 'MXN', 'decimals' => 2]    // <-- ADDED
+    ];
+    
+    // Default exchange rates (will be updated from API)
+    $DEFAULT_RATES = [
+        'USD' => 1, 'EUR' => 0.92, 'JPY' => 148.5, 'GBP' => 0.79, 'HKD' => 7.82,
+        'CNY' => 7.24, 'SEK' => 10.45, 'MXN' => 16.80   // <-- ADDED
+    ];
     
     function curl_get($url) {
         $ch = curl_init();
@@ -278,46 +122,48 @@ $(document).ready(function(){
     }
     
     function getExchangeRates() {
+        global $DEFAULT_RATES;
         $rateUrl = "https://api.exchangerate-api.com/v4/latest/USD";
         $response = curl_get($rateUrl);
-        
-        $defaultRates = ['USD' => 1, 'EUR' => 0.92, 'JPY' => 148.5, 'GBP' => 0.79, 'HKD' => 7.82];
         
         if ($response) {
             $data = json_decode($response, true);
             if (isset($data['rates'])) {
-                return [
-                    'USD' => 1,
-                    'EUR' => $data['rates']['EUR'] ?? 0.92,
-                    'JPY' => $data['rates']['JPY'] ?? 148.5,
-                    'GBP' => $data['rates']['GBP'] ?? 0.79,
-                    'HKD' => $data['rates']['HKD'] ?? 7.82
-                ];
+                $rates = [];
+                foreach (array_keys($GLOBALS['DEFAULT_RATES']) as $code) {
+                    $rates[$code] = $data['rates'][$code] ?? $GLOBALS['DEFAULT_RATES'][$code];
+                }
+                return $rates;
             }
         }
-        return $defaultRates;
+        return $GLOBALS['DEFAULT_RATES'];
     }
     
     function getCurrencyInfo($currencyCode) {
-        $currencies = [
-            'USD' => ['symbol' => '$', 'code' => 'USD'],
-            '$' => ['symbol' => '$', 'code' => 'USD'],
-            'EUR' => ['symbol' => '€', 'code' => 'EUR'],
-            '€' => ['symbol' => '€', 'code' => 'EUR'],
-            'JPY' => ['symbol' => '¥', 'code' => 'JPY'],
-            'GBP' => ['symbol' => '£', 'code' => 'GBP'],
-            '£' => ['symbol' => '£', 'code' => 'GBP'],
-            'HKD' => ['symbol' => 'HK$', 'code' => 'HKD'],
-            'HK$' => ['symbol' => 'HK$', 'code' => 'HKD'],
-            'CNY' => ['symbol' => 'CN¥', 'code' => 'CNY']
+        global $CURRENCY_CONFIG;
+        // Map common symbols to currency codes
+        $symbolMap = [
+            '$' => 'USD', '€' => 'EUR', '¥' => 'JPY', '£' => 'GBP',
+            'HK$' => 'HKD', 'CN¥' => 'CNY', 'kr' => 'SEK', 'MX$' => 'MXN'
         ];
         
-        // Handle ¥ symbol carefully - prefer JPY if not specified
-        if ($currencyCode === '¥') {
-            return ['symbol' => '¥', 'code' => 'JPY'];
+        // If input is a symbol, convert to currency code
+        if (isset($symbolMap[$currencyCode])) {
+            $currencyCode = $symbolMap[$currencyCode];
         }
         
-        return $currencies[$currencyCode] ?? ['symbol' => '$', 'code' => 'USD'];
+        // Return config if exists, otherwise default to USD
+        if (isset($CURRENCY_CONFIG[$currencyCode])) {
+            return $CURRENCY_CONFIG[$currencyCode];
+        }
+        
+        // Handle special case for 'kr' (could be SEK, NOK, DKK) - default to SEK
+        if ($currencyCode === 'kr') {
+            return $CURRENCY_CONFIG['SEK'];
+        }
+        
+        // Fallback
+        return ['symbol' => '$', 'code' => 'USD', 'decimals' => 2];
     }
     
     function convertCurrency($amount, $fromCurrency, $toCurrency, $exchangeRates) {
@@ -332,15 +178,8 @@ $(document).ready(function(){
     function formatCurrency($amount, $currency, $exchangeRates) {
         $info = getCurrencyInfo($currency);
         $symbol = $info['symbol'];
-        $code = $info['code'];
-        
-        if ($code == 'JPY') {
-            return $symbol . number_format($amount, 0);
-        }
-        if ($code == 'HKD') {
-            return $symbol . number_format($amount, 2);
-        }
-        return $symbol . number_format($amount, 2);
+        $decimals = $info['decimals'];
+        return $symbol . number_format($amount, $decimals);
     }
     
     // NEW: Get live price with original currency info
@@ -455,6 +294,10 @@ $(document).ready(function(){
         if (substr($symbolUpper, -3) == '.MX') {
             return ['display' => 'Mexico', 'code' => 'MEX'];
         }
+        // Handle BMV suffix or :BMV
+        if (strpos($symbolUpper, '.BMV') !== false || strpos($symbolUpper, ':BMV') !== false) {
+            return ['display' => 'Mexico', 'code' => 'MEX'];
+        }
         
         // Fallback to API lookup for other symbols
         $url = "https://query1.finance.yahoo.com/v1/finance/search?q=" . urlencode($symbol) . "&quotesCount=5&newsCount=0";
@@ -481,6 +324,7 @@ $(document).ready(function(){
                             'FRA' => 'FRA',
                             'HKG' => 'HKG',
                             'MEX' => 'MEX',
+                            'BMV' => 'MEX',
                             'HKE' => 'HKG',
                         ];
                         
@@ -490,6 +334,11 @@ $(document).ready(function(){
                         if (strpos($exchangeDisplay, 'Hong Kong') !== false || $exchangeCode == 'HKG') {
                             $exchangeDisplay = 'Hong Kong';
                             $exchangeCode = 'HKG';
+                        }
+                        // Clean up for Mexico
+                        if (strpos($exchangeDisplay, 'Mexico') !== false || $exchangeCode == 'MEX' || $rawExchange == 'MEX') {
+                            $exchangeDisplay = 'Mexico';
+                            $exchangeCode = 'MEX';
                         }
                         break;
                     }

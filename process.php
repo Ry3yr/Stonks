@@ -286,7 +286,7 @@
     <hr style="border: 0; height: 1px; background: #ddd; margin: 20px 0;">
 
     <h1>&#128200; Stock Market API</h1>
-    <div class="sub"><a target="_blank" href="https://query1.finance.yahoo.com/v1/finance/search?q=AAPL&quotesCount=5&newsCount=0">Yahoo Finance API Reference</a> - [<a target="_blank" href="/other/extra/fetchdata/2026-05-13-Finance/2026-05-13-Stocks/search_investingcom.php?search=U8X0.F">Buy/Sell Prdctr</a>] [<a target="_blank" href="stockattrib.php">Edit</a>]</div>
+    <div class="sub"><a target="_blank" href="https://query1.finance.yahoo.com/v1/finance/search?q=AAPL&quotesCount=5&newsCount=0">Yahoo Finance API Reference</a> - [<a target="_blank" href="/other/extra/fetchdata/2026-05-13-Finance/2026-05-13-Stocks/search_investingcom.php?search=U8X0.F">Buy/Sell Prdctr</a>][<a target="_blank" href="stock_rating.php?symbol=">Buy/NoBuy</a>] [<a target="_blank" href="stockattrib.php">Edit</a>]</div>
     
     <div class="search-box">
         <form method="GET" action="" id="stockForm">
