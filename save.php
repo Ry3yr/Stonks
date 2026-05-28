@@ -51,10 +51,11 @@ if (isset($_GET['del']) && $_GET['del'] == 'yes' && isset($_GET['handle'])) {
 }
 
 // Get parameters from URL
-$stock = isset($_GET['stock']) ? trim($_GET['stock']) : null;
-$price = isset($_GET['price']) ? trim($_GET['price']) : null;
-$currency = isset($_GET['currency']) ? trim($_GET['currency']) : null;
-$date = isset($_GET['date']) ? trim($_GET['date']) : date('Y-m-d');
+$stock           = isset($_GET['stock'])           ? trim($_GET['stock'])           : null;
+$price           = isset($_GET['price'])           ? trim($_GET['price'])           : null;
+$currency        = isset($_GET['currency'])        ? trim($_GET['currency'])        : null;
+$date            = isset($_GET['date'])            ? trim($_GET['date'])            : date('Y-m-d');
+$exchange_market = isset($_GET['exchange_market']) ? trim($_GET['exchange_market']) : 'N/A';
 
 // Validate required fields
 if (!$stock || !$price) {
@@ -63,12 +64,13 @@ if (!$stock || !$price) {
 
 // Prepare stock data
 $stockData = [
-    'stock' => $stock,
-    'price' => floatval($price),
-    'currency' => $currency,
-    'date' => $date,
-    'timestamp' => date('Y-m-d H:i:s'),
-    'saved_at' => time()
+    'stock'           => $stock,
+    'price'           => floatval($price),
+    'currency'        => $currency,
+    'date'            => $date,
+    'timestamp'       => date('Y-m-d H:i:s'),
+    'saved_at'        => time(),
+    'exchange_market' => $exchange_market
 ];
 
 // Load existing stocks.json

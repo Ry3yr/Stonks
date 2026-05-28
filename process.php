@@ -619,12 +619,17 @@
                 
                 echo '<div class="info">Exchange: ' . htmlspecialchars($exchangeName) . '</div>';
 
-                $saveUrl = 'save.php?stock=' . urlencode($symbol) .
-                           '&price='    . urlencode(number_format((float)$convertedPrice, 2)) .
-                           '&currency=' . urlencode($targetSymbol) .
-                           '&date='     . urlencode($today);
+                $saveUrl = 'save.php?stock='         . urlencode($symbol) .
+                           '&price='               . urlencode(is_numeric($convertedPrice) ? number_format((float)$convertedPrice, 2) : '0') .
+                           '&currency='            . urlencode($targetSymbol) .
+                           '&date='                . urlencode($today) .
+                           '&exchange_market='     . urlencode($exchangeName);
 
-                echo '<button class="save-btn" onclick="window.open(\'' . $saveUrl . '\', \'_blank\')">&#128190; Save to JSON</button>';
+                if (is_numeric($convertedPrice)) {
+                    echo '<button class="save-btn" onclick="window.open(\'' . $saveUrl . '\', \'_blank\')">&#128190; Save to JSON</button>';
+                } else {
+                    echo '<button class="save-btn" style="background:#6c757d; cursor:not-allowed;" disabled title="Price unavailable">&#128190; Save unavailable</button>';
+                }
                 echo '</div>';
 
             } else {
