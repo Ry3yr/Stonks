@@ -1,4 +1,3 @@
-
 <!---All Bought Stocks-->
 <a href="javascript:var spoiler = document.getElementById('pastplaying'); spoiler.open = !spoiler.open;" style="opacity: 0;">LastPlaying</a>
 <details id="pastplaying">
@@ -76,6 +75,9 @@
 
 // Configuration - use LOCAL file, not URL
 $stocksJsonFile = 'stocks.json';
+
+// --- Check if info parameter exists ---
+$showRatingColumn = isset($_GET['info']);
 
 // --- Function to read local JSON file ---
 function readLocalJson($filename) {
@@ -285,6 +287,12 @@ header('Content-Type: text/html; charset=utf-8');
         .badge-comdirect { background: #e8f5e9; color: #2e7d32; }
         h2, h3 { margin-top: 24px; margin-bottom: 12px; }
         .highlight { background-color: #fff8e1; }
+        .rating-iframe {
+            width: 280px;
+            height: 80px;
+            border: none;
+            background: transparent;
+        }
     </style>
 </head>
 <body>
@@ -327,6 +335,7 @@ header('Content-Type: text/html; charset=utf-8');
                     <th class="number">Gain/Share</th>
                     <th class="number">= Total Gain</th>
                     <th class="number">Return %</th>
+                    <?php if ($showRatingColumn): ?><th>Rating</th><?php endif; ?>
                 </tr>
             </thead>
             <tbody>
@@ -341,6 +350,9 @@ header('Content-Type: text/html; charset=utf-8');
                     <td class="number positive">+$<?= number_format($r['changePerShare'], 2) ?></td>
                     <td class="number positive"><strong>= +$<?= number_format($r['totalChange'], 2) ?></strong></td>
                     <td class="number positive">+<?= number_format($r['percent'], 2) ?>%</td>
+                    <?php if ($showRatingColumn): ?>
+                    <td><iframe class="rating-iframe" src="stock_rating.php?symbol=<?= urlencode($r['symbol']) ?>&compact" frameborder="0"></iframe></td>
+                    <?php endif; ?>
                 </tr>
             <?php endforeach; ?>
             </tbody>
@@ -364,6 +376,7 @@ header('Content-Type: text/html; charset=utf-8');
                         <th class="number">Loss/Share</th>
                         <th class="number">= Total Loss</th>
                         <th class="number">Return %</th>
+                        <?php if ($showRatingColumn): ?><th>Rating</th><?php endif; ?>
                     </tr>
                 </thead>
                 <tbody>
@@ -378,6 +391,9 @@ header('Content-Type: text/html; charset=utf-8');
                         <td class="number negative">-$<?= number_format(abs($f['changePerShare']), 2) ?></td>
                         <td class="number negative"><strong>= -$<?= number_format(abs($f['totalChange']), 2) ?></strong></td>
                         <td class="number negative"><?= number_format($f['percent'], 2) ?>%</td>
+                        <?php if ($showRatingColumn): ?>
+                        <td><iframe class="rating-iframe" src="stock_rating.php?symbol=<?= urlencode($f['symbol']) ?>&compact" frameborder="0"></iframe></td>
+                        <?php endif; ?>
                     </tr>
                 <?php endforeach; ?>
                 </tbody>
@@ -391,7 +407,7 @@ header('Content-Type: text/html; charset=utf-8');
             <summary>⚠️ Show Lookup Errors (<?= count($errors) ?> items)</summary>
             <h3>⚠️ Lookup Errors</h3>
             <table>
-                <thead><tr><th>Stock</th><th>ISIN</th><th>Depot</th><th class="number">Shares</th><th class="number">Invested</th><th>Error</th></tr></thead>
+                <thead><tr><th>Stock</th><th>ISIN</th><th>Depot</th><th class="number">Shares</th><th class="number">Invested</th><th>Error</th><?php if ($showRatingColumn): ?><th>Rating</th><?php endif; ?></tr></thead>
                 <tbody>
                 <?php foreach ($errors as $e): ?>
                     <tr class="highlight">
@@ -401,6 +417,7 @@ header('Content-Type: text/html; charset=utf-8');
                         <td class="number"><?= number_format($e['shares']) ?></td>
                         <td class="number">$<?= number_format($e['invested'], 2) ?></td>
                         <td class="negative"><?= htmlspecialchars($e['error']) ?></td>
+                        <?php if ($showRatingColumn): ?><td>—</td><?php endif; ?>
                     </tr>
                 <?php endforeach; ?>
                 </tbody>
@@ -411,18 +428,20 @@ header('Content-Type: text/html; charset=utf-8');
     <!-- TOTAL PORTFOLIO ROW -->
     <table class="total-row">
         <tr>
-            <td colspan="7"><strong>TOTAL PORTFOLIO</strong> (Sum of all: Shares × Gain/Loss per share)</td>
+            <td colspan="<?= $showRatingColumn ? '8' : '7' ?>"><strong>TOTAL PORTFOLIO</strong> (Sum of all: Shares × Gain/Loss per share)</td>
             <td class="number <?= $totalGainLoss >= 0 ? 'positive' : 'negative' ?>">
                 <strong><?= $totalGainLoss >= 0 ? '+' : '' ?>$<?= number_format(abs($totalGainLoss), 2) ?></strong>
             </td>
             <td class="number <?= $totalReturnPercent >= 0 ? 'positive' : 'negative' ?>">
                 <strong><?= $totalReturnPercent >= 0 ? '+' : '' ?><?= number_format($totalReturnPercent, 2) ?>%</strong>
             </td>
+            <?php if ($showRatingColumn): ?><td></td><?php endif; ?>
         </tr>
         <tr style="background: #e8f5e9;">
-            <td colspan="7"><strong>BREAKDOWN:</strong></td>
+            <td colspan="<?= $showRatingColumn ? '8' : '7' ?>"><strong>BREAKDOWN:</strong></td>
             <td class="number"><strong>$<?= number_format($totalInvested, 2) ?></strong> invested</td>
             <td class="number"><strong>$<?= number_format($totalCurrentValue, 2) ?></strong> current</td>
+            <?php if ($showRatingColumn): ?><td></td><?php endif; ?>
         </tr>
     </table>
     
@@ -431,6 +450,7 @@ header('Content-Type: text/html; charset=utf-8');
         <strong>Formula: [Shares] × ([Current Price] - [Buy Price]) = Total Gain/Loss per position</strong><br>
         Data source: local stocks.json | Live prices: Yahoo Finance Chart API<br>
         Generated: <?= date('Y-m-d H:i:s') ?>
+        <?php if ($showRatingColumn): ?><br><strong>ℹ️ Rating column active</strong> — embedded stock_rating.php?symbol={symbol}&compact<?php endif; ?>
     </div>
 </div>
 </body>
