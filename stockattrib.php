@@ -22,6 +22,11 @@ function cleanStockSymbol($symbol) {
     return $symbol;
 }
 
+// Function to create safe field name (replace dots with underscores for form fields)
+function safeFieldName($symbol) {
+    return str_replace('.', '_', $symbol);
+}
+
 // Keep original order for saving, use reversed for display
 $originalStocks = $stocks;
 $displayStocks = array_reverse($originalStocks);
@@ -44,10 +49,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_attributes'])) {
     foreach ($originalStocks as $index => $stock) {
         $stockName = $stock['stock'];
         $cleanName = cleanStockSymbol($stockName);
+        $safeName = safeFieldName($stockName); // FIX: Create safe version for form field
         
         // --- Update exchange market if provided ---
-        if (isset($_POST['exchange_' . $stockName])) {
-            $newExchange = trim($_POST['exchange_' . $stockName]);
+        // FIX: Look for the safe field name (PNG_V instead of PNG.V)
+        if (isset($_POST['exchange_' . $safeName])) {
+            $newExchange = trim($_POST['exchange_' . $safeName]);
             if ($newExchange !== '') {
                 $updatedStocks[$index]['exchange_market'] = $newExchange;
             }
@@ -122,10 +129,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_attributes'])) {
                     <?php 
                     $stockName = $stock['stock'];
                     $cleanName = cleanStockSymbol($stockName);
+                    $safeName = safeFieldName($stockName); // FIX: Create safe version for form field
                     $currentCyclic = isset($attributes[$cleanName]['cyclic']) ? $attributes[$cleanName]['cyclic'] : '';
                     $currentVolatile = isset($attributes[$cleanName]['volatile']) ? $attributes[$cleanName]['volatile'] : '';
                     $hasIsin = isset($stock['isin']) && !empty($stock['isin']);
-                    $currentExchange = htmlspecialchars($stock['exchange_market']);
+                    $currentExchange = isset($stock['exchange_market']) ? htmlspecialchars($stock['exchange_market']) : '';
                     ?>
                     <tr>
                         <td>
@@ -140,7 +148,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_attributes'])) {
                         <td><?php echo htmlspecialchars($stock['currency']); ?></td>
                         <td><?php echo htmlspecialchars($stock['date']); ?></td>
                         <td>
-                            <input type="text" name="exchange_<?php echo htmlspecialchars($stockName); ?>" 
+                            <!-- FIX: Use safe name (PNG_V instead of PNG.V) -->
+                            <input type="text" name="exchange_<?php echo htmlspecialchars($safeName); ?>" 
                                    value="<?php echo $currentExchange; ?>" size="15">
                         </td>
                         <td>

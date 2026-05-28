@@ -1,6 +1,8 @@
 // Function to load stock attributes and add indicators
 function loadStockAttributes() {
-    fetch('stockattributes.json')
+    // Add cache-busting timestamp to force fresh load
+    const cacheBuster = new Date().getTime();
+    fetch(`stockattributes.json?t=${cacheBuster}`)
         .then(response => {
             if (!response.ok) {
                 throw new Error('stockattributes.json not found');
