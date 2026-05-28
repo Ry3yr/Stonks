@@ -455,7 +455,7 @@ if ($isCompact) {
         </div>
     </div>
     <div class="footer-note">
-        📈 Data: Yahoo Finance | 💡 Philosophy: Sell on business deterioration, not candles or moving averages
+        📈 Data: Yahoo Finance | 💡 Philosophy: <a target="_blank" href="https://m.youtube.com/watch?v=E2O2Qs6B6JA">Sell on business deterioration, not candles or moving averages</a>
     </div>
 </div>
 

@@ -603,7 +603,14 @@
                     echo '<div class="spark-wrapper" id="sparkline-container"></div>';
                     echo '<span class="info" style="margin-top:0;">7-Day Change: ' . $change7dSign . '$' . number_format(abs($sevenDayChange), 2) . ' (' . $change7dSign . number_format($sevenDayChangePct, 2) . '%)</span>';
                     echo '</div>';
-                    
+                    // Add this after the sparkline container, inside the <div class="trend-container">
+echo '<div style="display:inline-flex; align-items:center; margin-left:10px;">';
+echo '<iframe src="stock_rating_growth.php?symbol=' . urlencode($symbol) . '&compact" 
+        style="width:250px; height:30px; border:none; overflow:hidden;" 
+        scrolling="no" 
+        frameborder="0">
+</iframe>';
+echo '</div>';
                     // Pass sparkline data to JavaScript
                     echo '<script>';
                     echo 'const sparklineData_' . md5($symbol) . ' = ' . json_encode($sparklineData) . ';';
