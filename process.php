@@ -604,12 +604,15 @@
                     echo '<span class="info" style="margin-top:0;">7-Day Change: ' . $change7dSign . '$' . number_format(abs($sevenDayChange), 2) . ' (' . $change7dSign . number_format($sevenDayChangePct, 2) . '%)</span>';
                     echo '</div>';
                     // Add this after the sparkline container, inside the <div class="trend-container">
-echo '<div style="display:inline-flex; align-items:center; margin-left:10px;">';
+echo '<div style="display:inline-flex; align-items:center; margin-left:10px; flex-wrap:wrap; gap:10px;">';
 echo '<iframe src="stock_rating_growth.php?symbol=' . urlencode($symbol) . '&compact" 
         style="width:250px; height:30px; border:none; overflow:hidden;" 
         scrolling="no" 
         frameborder="0">
 </iframe>';
+// Use the original query (which might be an ISIN) instead of the resolved symbol
+$badge_query = $query; // $query is the original user input (JP3756600007)
+echo '<iframe src="/other/extra/fetchdata/2026-05-13-Finance/2026-05-13-Stocks/xchangemarket_badge.php?q=' . urlencode($badge_query) . '" style="width:250px; height:30px; border:none; overflow:hidden;" scrolling="no" frameborder="0" sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-modals" referrerpolicy="no-referrer-when-downgrade"> </iframe>';
 echo '</div>';
                     // Pass sparkline data to JavaScript
                     echo '<script>';
