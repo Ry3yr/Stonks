@@ -28,6 +28,20 @@ $symbol = isset($_GET['q']) ? strtoupper(trim($_GET['q'])) : '';
             color: #856404;
             border-left: 3px solid #ffc107;
         }
+        .gettex-not-in-json button {
+            background: #f0b90b;
+            color: #fff;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+            margin-left: 6px;
+        }
+        .gettex-not-in-json button:hover {
+            background: #d4a00a;
+        }
         .gettex-missing-isin {
             background: #f8d7da;
             color: #721c24;
@@ -100,10 +114,11 @@ function checkGettex(symbol) {
             else if (data && data.status === "isin_checked" && data.gettex === "no") {
                 badge.innerHTML = '<span class="gettex-badge gettex-unavailable" title="ISIN not found on Gettex">🏛️ ✗ ISIN not on Gettex</span>';
             }
-            // CASE 6: Symbol NOT IN JSON
-            else if (data && data.status === "not_found") {
-                badge.innerHTML = '<span class="gettex-badge gettex-not-in-json" title="Symbol not found in stocks.json">📋 ✗ NOT IN JSON</span>';
-            }
+ // CASE 6: Symbol NOT IN JSON - with clickable TradingView button using top-level navigation
+else if (data && data.status === "not_found") {
+    const tradingViewUrl = 'https://www.tradingview.com/chart/?symbol=' + encodeURIComponent(symbol);
+    badge.innerHTML = '<span class="gettex-badge gettex-not-in-json" title="Symbol not found in stocks.json">📋 ✗ NOT IN JSON <button onclick="window.top.open(\'' + tradingViewUrl + '\', \'_blank\'); event.stopPropagation();">TrdVw</button></span>';
+}
             // CASE 7: Symbol found in JSON via ISIN lookup
             else if (data && data.status === "found_in_json") {
                 if (data.gettex === 'yes') {

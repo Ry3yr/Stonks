@@ -750,6 +750,8 @@ $(document).ready(function(){
                             
                             <a href="buy.php?go=<?php echo urlencode($symbol); ?>" class="gray-buy-link" target="_blank">Buy</a>
                             
+                            <button style="background:#f0b90b; color:#fff; padding:4px 10px; border-radius:4px; font-size:12px; border:none; cursor:pointer;" onclick="window.open('https://www.tradingview.com/chart/?symbol=<?php echo urlencode($symbol); ?>', '_blank');">TrdVw</button>
+                            
                             <button style="background:#6f42c1; color:white; padding:4px 10px; border-radius:4px; font-size:12px; border:none; cursor:pointer;" 
         onclick="var btn=this; var symbol='<?php echo urlencode($symbol); ?>'; var parent=btn.parentNode; var existing=parent.querySelector('.prdct-iframe-container'); if(existing){existing.remove(); btn.style.display='inline-block';}else{btn.style.display='none'; var container=document.createElement('div'); container.className='prdct-iframe-container'; var iframe=document.createElement('iframe'); iframe.src='stock_rating_growth.php?symbol='+decodeURIComponent(symbol)+'&compact'; iframe.style.border='1px solid #ddd'; iframe.style.borderRadius='4px'; iframe.style.background='white'; iframe.width='110'; iframe.height='30'; container.appendChild(iframe); parent.insertBefore(container, btn.nextSibling);}">
     prdct
