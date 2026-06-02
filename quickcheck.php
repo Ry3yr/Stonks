@@ -1,3 +1,5 @@
+<a target="_blank" href="https://alceawis.de/other/extra/scripts/fakesocialmedia/commentload.html?number=8000&text=How%20to%20set%20%23stock%20sell%20estimate%3A%0D%0A0)%20Nominal%20(how%20many%20share">SET Stock Sell UPPER Limit</a>
+
 <!---All Bought Stocks-->
 <a href="javascript:var spoiler = document.getElementById('pastplaying'); spoiler.open = !spoiler.open;" style="opacity: 0;">LastPlaying</a>
 <details id="pastplaying">
@@ -38,7 +40,7 @@
             var aesKey = await crypto.subtle.deriveKey(
                 {
                     name: "PBKDF2",
-                    salt: new Uint8Array(16), // Use a random salt for real-world scenarios
+                    salt: new Uint8Array(16),
                     iterations: 100000,
                     hash: "SHA-256"
                 },
@@ -126,7 +128,7 @@ function getCurrentPrice($symbol) {
     return null;
 }
 
-// --- Clean symbol (remove .F, .DE, .XE, etc.) ---
+// --- Clean symbol (remove .F, .DE, .XE, .TO, .L, etc.) ---
 function cleanSymbol($symbol) {
     $dotPos = strpos($symbol, '.');
     if ($dotPos !== false) {
@@ -135,21 +137,22 @@ function cleanSymbol($symbol) {
     return $symbol;
 }
 
-// --- Get price with fallback: cleaned first, then original ---
+// --- Get price with fallback: Try original FIRST, then cleaned ---
 function getPriceWithFallback($originalSymbol) {
-    // Step 1: Try cleaned symbol (remove .F, .DE, etc.)
-    $cleanedSymbol = cleanSymbol($originalSymbol);
-    $quote = getCurrentPrice($cleanedSymbol);
+    // Step 1: Try original symbol as-is (with .TO, .L, .AX, etc.)
+    $quote = getCurrentPrice($originalSymbol);
     
     if ($quote) {
         return $quote;
     }
     
-    // Step 2: If cleaned fails, try original symbol as-is
-    $quote = getCurrentPrice($originalSymbol);
-    
-    if ($quote) {
-        return $quote;
+    // Step 2: If original fails, try cleaned symbol (remove suffix)
+    $cleanedSymbol = cleanSymbol($originalSymbol);
+    if ($cleanedSymbol !== $originalSymbol) {
+        $quote = getCurrentPrice($cleanedSymbol);
+        if ($quote) {
+            return $quote;
+        }
     }
     
     return null;
@@ -184,7 +187,7 @@ $totalInvested = 0;
 $totalCurrentValue = 0;
 
 foreach ($stocksWithIsin as $stock) {
-    $name = $stock['stock'];
+    $name = $stock['stock'];  // Keep original with suffix!
     $isin = $stock['isin'];
     $oldPrice = (float)$stock['price'];
     $shares = (int)$stock['nrbght'];
@@ -194,12 +197,13 @@ foreach ($stocksWithIsin as $stock) {
     $invested = $oldPrice * $shares;
     $totalInvested += $invested;
     
-    // Get price with fallback: cleaned first, then original
+    // Get price with fallback: try original FIRST, then cleaned
     $quote = getPriceWithFallback($name);
     
     if (!$quote) {
         $errors[] = [
             'name' => $name,
+            'original_symbol' => $name,
             'isin' => $isin,
             'shares' => $shares,
             'old' => $oldPrice,
@@ -211,7 +215,7 @@ foreach ($stocksWithIsin as $stock) {
     }
     
     $currentPrice = $quote['price'];
-    $usedSymbol = $quote['symbol'];
+    $usedSymbol = $quote['symbol'];  // This might be cleaned version
     
     // Calculate position values
     $currentTotal = $currentPrice * $shares;
@@ -223,8 +227,9 @@ foreach ($stocksWithIsin as $stock) {
     
     $result = [
         'name' => $name,
+        'original_symbol' => $name,  // Store original for iframe!
+        'lookup_symbol' => $usedSymbol,  // What Yahoo actually used
         'isin' => $isin,
-        'symbol' => $usedSymbol,
         'shares' => $shares,
         'old' => $oldPrice,
         'current' => $currentPrice,
@@ -298,7 +303,7 @@ header('Content-Type: text/html; charset=utf-8');
 <body>
 <div class="container">
     <h1>📊 Portfolio Performance</h1>
-    <div class="subtitle">Stocks with ISIN codes | Local file: stocks.json | Lookup: Clean symbol first, then original</div>
+    <div class="subtitle">Stocks with ISIN codes | Local file: stocks.json | Lookup: Try original symbol first, then cleaned (remove suffix)</div>
     
     <!-- Portfolio Summary Cards -->
     <div class="stats">
@@ -341,7 +346,7 @@ header('Content-Type: text/html; charset=utf-8');
             <tbody>
             <?php foreach ($risen as $r): ?>
                 <tr>
-                    <td><strong><?= htmlspecialchars($r['name']) ?></strong><br><span class="symbol"><?= htmlspecialchars($r['symbol']) ?></span></td>
+                    <td><strong><?= htmlspecialchars($r['name']) ?></strong><br><span class="symbol"><?= htmlspecialchars($r['lookup_symbol']) ?></span></td>
                     <td class="isin-code"><?= htmlspecialchars($r['isin']) ?></td>
                     <td><span class="badge badge-<?= htmlspecialchars($r['depot']) ?>"><?= htmlspecialchars($r['depot']) ?></span></td>
                     <td class="number"><strong><?= number_format($r['shares']) ?></strong> ×</td>
@@ -351,7 +356,7 @@ header('Content-Type: text/html; charset=utf-8');
                     <td class="number positive"><strong>= +$<?= number_format($r['totalChange'], 2) ?></strong></td>
                     <td class="number positive">+<?= number_format($r['percent'], 2) ?>%</td>
                     <?php if ($showRatingColumn): ?>
-                    <td><iframe class="rating-iframe" src="stock_rating.php?symbol=<?= urlencode($r['symbol']) ?>&compact" frameborder="0"></iframe></td>
+                    <td><iframe class="rating-iframe" src="stock_rating.php?symbol=<?= urlencode($r['original_symbol']) ?>&compact" frameborder="0"></iframe></td>
                     <?php endif; ?>
                 </tr>
             <?php endforeach; ?>
@@ -382,7 +387,7 @@ header('Content-Type: text/html; charset=utf-8');
                 <tbody>
                 <?php foreach ($fallen as $f): ?>
                     <tr>
-                        <td><strong><?= htmlspecialchars($f['name']) ?></strong><br><span class="symbol"><?= htmlspecialchars($f['symbol']) ?></span></td>
+                        <td><strong><?= htmlspecialchars($f['name']) ?></strong><br><span class="symbol"><?= htmlspecialchars($f['lookup_symbol']) ?></span></td>
                         <td class="isin-code"><?= htmlspecialchars($f['isin']) ?></td>
                         <td><span class="badge badge-<?= htmlspecialchars($f['depot']) ?>"><?= htmlspecialchars($f['depot']) ?></span></td>
                         <td class="number"><strong><?= number_format($f['shares']) ?></strong> ×</td>
@@ -392,7 +397,7 @@ header('Content-Type: text/html; charset=utf-8');
                         <td class="number negative"><strong>= -$<?= number_format(abs($f['totalChange']), 2) ?></strong></td>
                         <td class="number negative"><?= number_format($f['percent'], 2) ?>%</td>
                         <?php if ($showRatingColumn): ?>
-                        <td><iframe class="rating-iframe" src="stock_rating.php?symbol=<?= urlencode($f['symbol']) ?>&compact" frameborder="0"></iframe></td>
+                        <td><iframe class="rating-iframe" src="stock_rating.php?symbol=<?= urlencode($f['original_symbol']) ?>&compact" frameborder="0"></iframe></td>
                         <?php endif; ?>
                     </tr>
                 <?php endforeach; ?>
@@ -446,11 +451,11 @@ header('Content-Type: text/html; charset=utf-8');
     </table>
     
     <div class="footer">
-        <strong>Lookup logic: 1) Clean symbol (remove .F/.DE) → 2) Original symbol as-is</strong><br>
+        <strong>Lookup logic: 1) Try original symbol (with suffix like .TO) → 2) Try cleaned symbol (without suffix)</strong><br>
         <strong>Formula: [Shares] × ([Current Price] - [Buy Price]) = Total Gain/Loss per position</strong><br>
         Data source: local stocks.json | Live prices: Yahoo Finance Chart API<br>
         Generated: <?= date('Y-m-d H:i:s') ?>
-        <?php if ($showRatingColumn): ?><br><strong>ℹ️ Rating column active</strong> — embedded stock_rating.php?symbol={symbol}&compact<?php endif; ?>
+        <?php if ($showRatingColumn): ?><br><strong>ℹ️ Rating column active</strong> — embedded stock_rating.php?symbol={original_symbol}&compact (keeps .TO, .L, etc.)<?php endif; ?>
     </div>
 </div>
 </body>
