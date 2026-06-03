@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stock Charts | Tooltip Sorted by Current Value</title>
+    <!-- Chart.js CDN v3.9 -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            font-family: system-ui, 'Segoe UI', 'Roboto', 'Helvetica Neue', sans-serif;
+        }
+        body {
+            background: linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%);
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .card {
+            max-width: 1400px;
+            width: 100%;
+            background: #ffffff;
+            border-radius: 32px;
+            box-shadow: 0 25px 50px -12px rgba(0,0,0,0.4);
+            overflow: hidden;
+        }
+        .header {
+            background: #0a0f1e;
+            padding: 1.5rem 2rem;
+            color: white;
+        }
+        .header h1 {
+            margin: 0 0 6px 0;
+            font-weight: 600;
+            font-size: 1.8rem;
+        }
+        .badge-container {
+            margin-top: 12px;
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .badge {
+            background: rgba(255,255,255,0.12);
+            padding: 4px 14px;
+            border-radius: 30px;
+            font-size: 0.7rem;
+            font-family: monospace;
+        }
+        .toolbar {
+            padding: 1rem 2rem;
+            background: #f8fafc;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: center;
+            gap: 15px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        .btn-group {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .btn {
+            border: none;
+            padding: 10px 24px;
+            border-radius: 40px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-size: 0.85rem;
+        }
+        .btn-primary {
+            background: #3b82f6;
+            color: white;
+        }
+        .btn-primary:hover {
+            background: #2563eb;
+        }
+        .btn-outline {
+            background: white;
+            border: 1px solid #cbd5e1;
+            color: #1e293b;
+        }
+        .stats-info {
+            font-size: 0.8rem;
+            background: #e0f2fe;
+            padding: 6px 14px;
+            border-radius: 30px;
+            color: #075985;
+            font-family: monospace;
+        }
+        .chart-wrapper {
+            padding: 1.5rem 2rem 1rem 2rem;
+            height: 550px;
+            position: relative;
+        }
+        .filter-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        select {
+            padding: 8px 12px;
+            border-radius: 28px;
+            border: 1px solid #cbd5e1;
+            background: white;
+            font-size: 0.8rem;
+            min-width: 180px;
+            cursor: pointer;
+        }
+        .filter-badge {
+            background: #dbeafe;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            color: #1e40af;
+        }
+        @media (max-width: 700px) {
+            .toolbar { flex-direction: column; align-items: stretch; }
+            .chart-wrapper { padding: 1rem; height: 450px; }
+        }
+    </style>
+</head>
+<body>
+<div class="card">
+    <div class="header">
+        <h1>📊 Stock Portfolio Tracker</h1>
+        <p>Tooltip: <strong>highest value on top, lowest on bottom</strong></p>
+        <div class="badge-container">
+            <span class="badge">💰 Dollar values</span>
+            <span class="badge">📊 Tooltip sorted by current hover value</span>
+            <span class="badge">🔗 Try: ?individual=crsr or ?individual=all</span>
+        </div>
+    </div>
+    <div class="toolbar">
+        <div class="btn-group">
+            <button id="toggleViewBtn" class="btn btn-primary">📈 Switch to Individual Stocks</button>
+            <button id="refreshBtn" class="btn btn-outline">🔄 Refresh Data</button>
+        </div>
+        <div id="stockFilterContainer" style="display: none;" class="filter-row">
+            <select id="stockSelect">
+                <option value="__ALL__">📊 Show all stocks</option>
+            </select>
+            <span id="filterStatus" class="filter-badge">📈 All stocks</span>
+        </div>
+        <div class="stats-info" id="dataStats">📦 Loading...</div>
+    </div>
+    <div class="chart-wrapper">
+        <canvas id="stockChart"></canvas>
+    </div>
+</div>
+
+<script>
+    // Get URL params
+    const urlParams = new URLSearchParams(window.location.search);
+    let individualParam = urlParams.get('individual');
+    
+    let chart = null;
+    let currentView = 'aggregated';
+    let stockData = [];
+    let allStocksSet = new Set();
+    let allStocksMap = new Map();
+    let currentFilterStock = '__ALL__';
+    
+    async function loadStockData() {
+        const statsDiv = document.getElementById('dataStats');
+        statsDiv.innerHTML = '⏳ Loading stockstats.json...';
+        
+        try {
+            const url = `./stockstats.json?t=${Date.now()}`;
+            const response = await fetch(url);
+            
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            
+            const jsonData = await response.json();
+            stockData = jsonData;
+            
+            allStocksSet.clear();
+            allStocksMap.clear();
+            for (const snapshot of stockData) {
+                if (snapshot.stocks) {
+                    Object.keys(snapshot.stocks).forEach(symbol => {
+                        allStocksSet.add(symbol);
+                        allStocksMap.set(symbol.toLowerCase(), symbol);
+                    });
+                }
+            }
+            
+            statsDiv.innerHTML = `✅ ${stockData.length} snapshots, ${allStocksSet.size} stocks`;
+            
+            updateStockSelector();
+            applyUrlParam();
+            
+        } catch (error) {
+            console.error('Load error:', error);
+            statsDiv.innerHTML = `❌ Error: ${error.message}`;
+        }
+    }
+    
+    function applyUrlParam() {
+        if (individualParam) {
+            if (individualParam === 'all') {
+                currentView = 'individual';
+                currentFilterStock = '__ALL__';
+                updateUIForIndividualView();
+                updateFilterStatus('__ALL__');
+                refreshChart();
+            } 
+            else {
+                const lowerParam = individualParam.toLowerCase();
+                const matchedStock = allStocksMap.get(lowerParam);
+                
+                if (matchedStock) {
+                    currentView = 'individual';
+                    currentFilterStock = matchedStock;
+                    updateUIForIndividualView();
+                    const select = document.getElementById('stockSelect');
+                    if (select) select.value = matchedStock;
+                    updateFilterStatus(matchedStock);
+                    refreshChart();
+                } else {
+                    currentView = 'aggregated';
+                    currentFilterStock = '__ALL__';
+                    updateUIForAggregatedView();
+                    refreshChart();
+                }
+            }
+        } else {
+            currentView = 'aggregated';
+            currentFilterStock = '__ALL__';
+            updateUIForAggregatedView();
+            refreshChart();
+        }
+    }
+    
+    function updateUIForIndividualView() {
+        document.getElementById('toggleViewBtn').innerHTML = '📊 Switch to Aggregated View';
+        document.getElementById('stockFilterContainer').style.display = 'flex';
+        document.getElementById('toggleViewBtn').classList.remove('btn-primary');
+        document.getElementById('toggleViewBtn').classList.add('btn-outline');
+    }
+    
+    function updateUIForAggregatedView() {
+        document.getElementById('toggleViewBtn').innerHTML = '📈 Switch to Individual Stocks';
+        document.getElementById('stockFilterContainer').style.display = 'none';
+        document.getElementById('toggleViewBtn').classList.remove('btn-outline');
+        document.getElementById('toggleViewBtn').classList.add('btn-primary');
+    }
+    
+    function updateStockSelector() {
+        const select = document.getElementById('stockSelect');
+        select.innerHTML = '<option value="__ALL__">📊 Show all stocks</option>';
+        const sorted = Array.from(allStocksSet).sort();
+        for (const stock of sorted) {
+            const option = document.createElement('option');
+            option.value = stock;
+            option.textContent = stock;
+            select.appendChild(option);
+        }
+    }
+    
+    function updateFilterStatus(mode) {
+        const span = document.getElementById('filterStatus');
+        if (mode === '__ALL__' || mode === 'all') {
+            span.innerHTML = `📈 Showing ALL ${allStocksSet.size} stocks`;
+            span.style.background = '#dcfce7';
+            span.style.color = '#166534';
+        } else if (mode) {
+            span.innerHTML = `🔍 Showing: ${mode} only`;
+            span.style.background = '#fef3c7';
+            span.style.color = '#92400e';
+        }
+    }
+    
+    function getTimestamps() {
+        return stockData.map(s => s.timestamp);
+    }
+    
+    function getYAxisLimits(dataArrays) {
+        let allValues = [];
+        for (const arr of dataArrays) {
+            for (const val of arr) {
+                if (val !== null && typeof val === 'number' && !isNaN(val)) {
+                    allValues.push(val);
+                }
+            }
+        }
+        
+        if (allValues.length === 0) return { min: -10, max: 10 };
+        
+        let minVal = Math.min(...allValues);
+        let maxVal = Math.max(...allValues);
+        const padding = Math.max(Math.abs(maxVal - minVal) * 0.2, 5);
+        
+        if (minVal === maxVal) {
+            minVal = minVal - 5;
+            maxVal = maxVal + 5;
+        }
+        
+        return {
+            min: Math.floor(minVal - padding),
+            max: Math.ceil(maxVal + padding)
+        };
+    }
+    
+    function getAggregatedDatasets() {
+        const gains = [], losses = [], nets = [];
+        for (const snap of stockData) {
+            gains.push(snap.summary?.total_gain ?? null);
+            losses.push(snap.summary?.total_loss ?? null);
+            nets.push(snap.summary?.net_result ?? null);
+        }
+        
+        const yLimits = getYAxisLimits([gains, losses, nets]);
+        
+        return {
+            datasets: [
+                { label: '💰 Total Gain ($)', data: gains, borderColor: '#22c55e', borderWidth: 3, tension: 0.1, pointRadius: 4 },
+                { label: '📉 Total Loss ($)', data: losses, borderColor: '#ef4444', borderWidth: 3, tension: 0.1, pointRadius: 4 },
+                { label: '⚖️ Net Result ($)', data: nets, borderColor: '#3b82f6', borderWidth: 2, borderDash: [5, 5], tension: 0.1, pointRadius: 3 }
+            ],
+            yLimits: yLimits
+        };
+    }
+    
+    function getIndividualDatasets() {
+        const timestamps = getTimestamps();
+        const datasets = [];
+        let allValues = [];
+        
+        if (currentFilterStock === '__ALL__') {
+            const colors = ['#3b82f6', '#ef4444', '#22c55e', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16', '#f97316', '#6366f1'];
+            const stocks = Array.from(allStocksSet).sort();
+            let idx = 0;
+            for (const stock of stocks) {
+                const values = timestamps.map((_, i) => stockData[i].stocks?.[stock] ?? null);
+                if (values.some(v => v !== null)) {
+                    datasets.push({
+                        label: stock,
+                        data: values,
+                        borderColor: colors[idx % colors.length],
+                        borderWidth: 1.5,
+                        pointRadius: 2,
+                        spanGaps: false
+                    });
+                    values.forEach(v => { if (v !== null) allValues.push(v); });
+                    idx++;
+                }
+            }
+        } else {
+            const values = timestamps.map((_, i) => stockData[i].stocks?.[currentFilterStock] ?? null);
+            values.forEach(v => { if (v !== null) allValues.push(v); });
+            const lastVal = [...values].reverse().find(v => v !== null);
+            const isPositive = lastVal > 0;
+            datasets.push({
+                label: `${currentFilterStock} ($)`,
+                data: values,
+                borderColor: isPositive ? '#22c55e' : '#ef4444',
+                borderWidth: 3,
+                pointRadius: 5,
+                pointBackgroundColor: '#fff',
+                pointBorderWidth: 2,
+                spanGaps: false
+            });
+        }
+        
+        const yLimits = getYAxisLimits([allValues]);
+        return { datasets, yLimits };
+    }
+    
+    function refreshChart() {
+        if (!stockData.length) return;
+        
+        const ctx = document.getElementById('stockChart').getContext('2d');
+        const timestamps = getTimestamps();
+        let datasets = [];
+        let yLimits = { min: -10, max: 10 };
+        let title = '';
+        let isMultiStock = false;
+        
+        if (currentView === 'aggregated') {
+            const agg = getAggregatedDatasets();
+            datasets = agg.datasets;
+            yLimits = agg.yLimits;
+            title = 'Aggregated View: Total Gain/Loss';
+        } else {
+            const ind = getIndividualDatasets();
+            datasets = ind.datasets;
+            yLimits = ind.yLimits;
+            isMultiStock = (currentFilterStock === '__ALL__');
+            title = isMultiStock ? `All ${allStocksSet.size} Stocks (sorted by value)` : `Individual Stock: ${currentFilterStock}`;
+        }
+        
+        if (chart) chart.destroy();
+        
+        chart = new Chart(ctx, {
+            type: 'line',
+            data: { labels: timestamps, datasets },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                interaction: { mode: 'index', intersect: false, axis: 'x' },
+                plugins: {
+                    tooltip: {
+                        // THIS IS THE KEY - sort items by value at hover point
+                        itemSort: function(a, b) {
+                            if (!isMultiStock) return 0;
+                            // Sort by raw value descending (highest first)
+                            const aVal = a.raw === null ? -Infinity : a.raw;
+                            const bVal = b.raw === null ? -Infinity : b.raw;
+                            return bVal - aVal;
+                        },
+                        callbacks: {
+                            label: function(context) {
+                                const val = context.raw;
+                                const label = context.dataset.label || '';
+                                if (val === null || val === undefined) {
+                                    return `${label}: (not held)`;
+                                }
+                                return `${label}: ${val >= 0 ? '+' : ''}$${val.toFixed(2)}`;
+                            }
+                        },
+                        bodyFont: { size: 11 },
+                        titleFont: { size: 12, weight: 'bold' }
+                    },
+                    title: { display: true, text: title, font: { size: 14 } },
+                    legend: { position: 'top', labels: { font: { size: 10 }, boxWidth: 12 } }
+                },
+                scales: {
+                    y: { 
+                        title: { display: true, text: 'Dollar Amount ($)' }, 
+                        ticks: { callback: v => '$' + v.toFixed(2) },
+                        min: yLimits.min,
+                        max: yLimits.max
+                    },
+                    x: { 
+                        title: { display: true, text: 'Timestamp' }, 
+                        ticks: { maxRotation: 45, autoSkip: true, maxTicksLimit: 8 }
+                    }
+                }
+            }
+        });
+    }
+    
+    // Event listeners
+    document.getElementById('toggleViewBtn').addEventListener('click', () => {
+        if (currentView === 'aggregated') {
+            currentView = 'individual';
+            currentFilterStock = '__ALL__';
+            updateUIForIndividualView();
+            updateFilterStatus('__ALL__');
+        } else {
+            currentView = 'aggregated';
+            updateUIForAggregatedView();
+        }
+        refreshChart();
+    });
+    
+    document.getElementById('refreshBtn').addEventListener('click', () => {
+        loadStockData();
+    });
+    
+    document.getElementById('stockSelect').addEventListener('change', (e) => {
+        currentFilterStock = e.target.value;
+        updateFilterStatus(currentFilterStock);
+        if (currentView === 'individual') refreshChart();
+    });
+    
+    // Start
+    loadStockData();
+</script>
+</body>
+</html>
