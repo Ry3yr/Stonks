@@ -98,26 +98,29 @@ foreach ($qualifiedStocks as $stock) {
 
 $netResult = $totalGain + $totalLoss;
 
-// Build output in requested format (stocks at root + summary)
-$output = $stocksGains;
-$output['summary'] = [
-    'total_gain' => round($totalGain, 2),
-    'total_loss' => round($totalLoss, 2),
-    'net_result' => round($netResult, 2)
+// Build entry in same format as stockstats.php (with timestamp)
+$entry = [
+    'timestamp' => date('Y-m-d H:i:s'),
+    'stocks' => $stocksGains,
+    'summary' => [
+        'total_gain' => round($totalGain, 2),
+        'total_loss' => round($totalLoss, 2),
+        'net_result' => round($netResult, 2)
+    ]
 ];
 
-// Output compact JSON to browser
+// Output compact JSON to browser (keeping backward compatibility with previous output format)
 header('Content-Type: application/json; charset=utf-8');
-echo json_encode($output, JSON_UNESCAPED_UNICODE);
+echo json_encode($stocksGains + ['summary' => $entry['summary']], JSON_UNESCAPED_UNICODE);
 
-// ALWAYS append to stockstats.json
+// ALWAYS append to stockstats.json (with timestamp, matching stockstats.php format)
 $allData = [];
 if (file_exists($statsFile)) {
     $decoded = json_decode(file_get_contents($statsFile), true);
     if (is_array($decoded)) $allData = $decoded;
 }
 
-$allData[] = $output;
+$allData[] = $entry;
 
 file_put_contents($statsFile, json_encode($allData, JSON_UNESCAPED_UNICODE));
 ?>
