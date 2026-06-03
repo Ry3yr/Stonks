@@ -1,7 +1,10 @@
+<a href="javascript:var spoiler = document.getElementById('pastplaying'); spoiler.open = !spoiler.open;" style="opacity: 0">LastPlaying</a><br><br>
+
+
+
 <a target="_blank" href="https://alceawis.de/other/extra/scripts/fakesocialmedia/commentload.html?number=8000&text=How%20to%20set%20%23stock%20sell%20estimate%3A%0D%0A0)%20Nominal%20(how%20many%20share">SET Stock Sell UPPER Limit</a>
 
 <!---All Bought Stocks-->
-<a href="javascript:var spoiler = document.getElementById('pastplaying'); spoiler.open = !spoiler.open;" style="opacity: 0;">LastPlaying</a>
 <details id="pastplaying">
 <summary style="display: none;"></summary>
 <div class="custom-summary" onclick="toggleDetails()"></div>
@@ -65,7 +68,6 @@
         <input type="submit" value="All">
 </form><div><div id="decryptedOutput"></div></div>
 </details>
-
 
 <?php
 
@@ -185,6 +187,8 @@ $same = [];
 $errors = [];
 $totalInvested = 0;
 $totalCurrentValue = 0;
+$totalWinsSum = 0;    // NEW: Sum of all winning gains
+$totalLossesSum = 0;  // NEW: Sum of all losing losses (absolute value for display)
 
 foreach ($stocksWithIsin as $stock) {
     $name = $stock['stock'];  // Keep original with suffix!
@@ -224,6 +228,13 @@ foreach ($stocksWithIsin as $stock) {
     $percentChange = ($changePerShare / $oldPrice) * 100;
     
     $totalCurrentValue += $currentTotal;
+    
+    // NEW: Add to totals for wins/losses
+    if ($totalChange > 0) {
+        $totalWinsSum += $totalChange;
+    } elseif ($totalChange < 0) {
+        $totalLossesSum += abs($totalChange);  // Store as positive number for display
+    }
     
     $result = [
         'name' => $name,
@@ -298,6 +309,23 @@ header('Content-Type: text/html; charset=utf-8');
             border: none;
             background: transparent;
         }
+        .summary-badge {
+            display: inline-block;
+            margin-left: 15px;
+            font-size: 0.9rem;
+            font-weight: normal;
+            background: #f0f0f0;
+            padding: 4px 12px;
+            border-radius: 20px;
+        }
+        .summary-badge.win {
+            background: #e6f7ec;
+            color: #00a86b;
+        }
+        .summary-badge.loss {
+            background: #fee9e8;
+            color: #e31b23;
+        }
     </style>
 </head>
 <body>
@@ -325,9 +353,12 @@ header('Content-Type: text/html; charset=utf-8');
         </div>
     </div>
     
-    <!-- RISEN STOCKS (always visible) -->
+    <!-- RISEN STOCKS (always visible) with total wins sum -->
     <?php if (!empty($risen)): ?>
-        <h2>📈 Winning Positions (Price Increased)</h2>
+        <h2>
+            📈 Winning Positions (Price Increased) 
+            <span class="summary-badge win">🏆 Total Gains: +$<?= number_format($totalWinsSum, 2) ?></span>
+        </h2>
         <table>
             <thead>
                 <tr>
@@ -364,10 +395,13 @@ header('Content-Type: text/html; charset=utf-8');
         </table>
     <?php endif; ?>
     
-    <!-- FALLEN STOCKS (hidden in spoiler) -->
+    <!-- FALLEN STOCKS (hidden in spoiler) with total losses sum -->
     <?php if (!empty($fallen)): ?>
         <details>
-            <summary>📉 Show Losing Positions (<?= count($fallen) ?> items)</summary>
+            <summary>
+                📉 Show Losing Positions (<?= count($fallen) ?> items)
+                <span class="summary-badge loss">💸 Total Losses: -$<?= number_format($totalLossesSum, 2) ?></span>
+            </summary>
             <h3>📉 Losing Positions (Price Decreased)</h3>
             <table>
                 <thead>
@@ -453,6 +487,7 @@ header('Content-Type: text/html; charset=utf-8');
     <div class="footer">
         <strong>Lookup logic: 1) Try original symbol (with suffix like .TO) → 2) Try cleaned symbol (without suffix)</strong><br>
         <strong>Formula: [Shares] × ([Current Price] - [Buy Price]) = Total Gain/Loss per position</strong><br>
+        <strong>🏆 Total Wins: +$<?= number_format($totalWinsSum, 2) ?> &nbsp;|&nbsp; 💸 Total Losses: -$<?= number_format($totalLossesSum, 2) ?></strong><br>
         Data source: local stocks.json | Live prices: Yahoo Finance Chart API<br>
         Generated: <?= date('Y-m-d H:i:s') ?>
         <?php if ($showRatingColumn): ?><br><strong>ℹ️ Rating column active</strong> — embedded stock_rating.php?symbol={original_symbol}&compact (keeps .TO, .L, etc.)<?php endif; ?>
