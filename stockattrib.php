@@ -159,6 +159,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_attributes'])) {
                                 <option value="halfyearly" <?php echo $currentCyclic == 'halfyearly' ? 'selected' : ''; ?>>Half-Yearly</option>
                                 <option value="yearly" <?php echo $currentCyclic == 'yearly' ? 'selected' : ''; ?>>Yearly</option>
                                 <option value="memestock" <?php echo $currentCyclic == 'memestock' ? 'selected' : ''; ?>>Memestock</option>
+                                <option value="ai" <?php echo $currentCyclic == 'ai' ? 'selected' : ''; ?>>AI</option>
+                                <option value="safegrowth" <?php echo $currentCyclic == 'safegrowth' ? 'selected' : ''; ?>>SafeGrowth</option>
                             </select>
                         </td>
                         <td>

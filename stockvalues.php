@@ -100,13 +100,15 @@ $(document).ready(function(){
         'HKD' => ['symbol' => 'HK$', 'code' => 'HKD', 'decimals' => 2],
         'CNY' => ['symbol' => 'CN¥', 'code' => 'CNY', 'decimals' => 2],
         'SEK' => ['symbol' => 'kr', 'code' => 'SEK', 'decimals' => 2],   // <-- ADDED
+        'BRL' => ['symbol' => 'R$', 'code' => 'BRL', 'decimals' => 2], // <-- ADD THIS
         'MXN' => ['symbol' => 'MX$', 'code' => 'MXN', 'decimals' => 2]    // <-- ADDED
     ];
     
     // Default exchange rates (will be updated from API)
     $DEFAULT_RATES = [
         'USD' => 1, 'EUR' => 0.92, 'JPY' => 148.5, 'GBP' => 0.79, 'HKD' => 7.82,
-        'CNY' => 7.24, 'SEK' => 10.45, 'MXN' => 16.80   // <-- ADDED
+        'CNY' => 7.24, 'SEK' => 10.45, 'MXN' => 16.80 ,  // <-- ADDED
+        'BRL' => 5.80 // <-- ADD THIS (approximate exchange rate)
     ];
     
     function curl_get($url) {
@@ -282,6 +284,9 @@ $(document).ready(function(){
         if (substr($symbolUpper, -3) == '.HK') {
             return ['display' => 'Hong Kong', 'code' => 'HKG'];
         }
+            if (substr($symbolUpper, -3) == '.SA') {
+        return ['display' => 'B3 - São Paulo', 'code' => 'BVMF'];
+    }
         if (substr($symbolUpper, -3) == '.L') {
             return ['display' => 'London', 'code' => 'LON'];
         }
@@ -482,7 +487,8 @@ $(document).ready(function(){
         'XETRA' => 'FRA',
         'Hong Kong' => 'HKG',
         'HongKong' => 'HKG',
-        'Mexico' => 'MEX'
+        'Mexico' => 'MEX',
+        'B3 - São Paulo' => 'BVMF'
     ];
     ?>
     
@@ -755,6 +761,11 @@ $(document).ready(function(){
                             <button style="background:#6f42c1; color:white; padding:4px 10px; border-radius:4px; font-size:12px; border:none; cursor:pointer;" 
         onclick="var btn=this; var symbol='<?php echo urlencode($symbol); ?>'; var parent=btn.parentNode; var existing=parent.querySelector('.prdct-iframe-container'); if(existing){existing.remove(); btn.style.display='inline-block';}else{btn.style.display='none'; var container=document.createElement('div'); container.className='prdct-iframe-container'; var iframe=document.createElement('iframe'); iframe.src='stock_rating_growth.php?symbol='+decodeURIComponent(symbol)+'&compact'; iframe.style.border='1px solid #ddd'; iframe.style.borderRadius='4px'; iframe.style.background='white'; iframe.width='110'; iframe.height='30'; container.appendChild(iframe); parent.insertBefore(container, btn.nextSibling);}">
     prdct
+</button>
+
+                            <button style="background:#6f02c1; color:white; padding:4px 10px; border-radius:4px; font-size:12px; border:none; cursor:pointer;" 
+        onclick="var btn=this; var symbol='<?php echo urlencode($symbol); ?>'; var parent=btn.parentNode; var existing=parent.querySelector('.hnl-iframe-container'); if(existing){existing.remove(); btn.style.display='inline-block';}else{btn.style.display='none'; var container=document.createElement('div'); container.className='hnl-iframe-container'; var iframe=document.createElement('iframe'); iframe.src='highnlows.php?symbol='+decodeURIComponent(symbol)+'&compact'; iframe.style.border='1px solid #ddd'; iframe.style.borderRadius='4px'; iframe.style.background='white'; iframe.width='180'; iframe.height='28'; container.appendChild(iframe); parent.insertBefore(container, btn.nextSibling);}">
+    h&l
 </button>
                             
                             <button class="delete-btn" onclick="if(confirm('Delete <?php echo htmlspecialchars($symbol); ?>?')) window.location.href='save.php?del=yes&handle=<?php echo urlencode($symbol); ?>'">X</button>

@@ -2,7 +2,7 @@
 
 
 
-<a target="_blank" href="https://alceawis.de/other/extra/scripts/fakesocialmedia/commentload.html?number=8000&text=How%20to%20set%20%23stock%20sell%20estimate%3A%0D%0A0)%20Nominal%20(how%20many%20share">SET Stock Sell UPPER Limit</a>
+<a target="_blank" href="https://alceawis.de/other/extra/scripts/fakesocialmedia/commentload.html?number=8000&text=How%20to%20set%20%23stock%20sell%20estimate%3A%0D%0A0)%20Nominal%20(how%20many%20share">SET Stock Sell UPPER Limit</a> [[<a target="_blank" href="stockstatsrender.html">(I)nfo</a>]]]
 
 <!---All Bought Stocks-->
 <details id="pastplaying">
