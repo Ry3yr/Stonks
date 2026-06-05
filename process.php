@@ -593,39 +593,48 @@
                 }
                 echo '</div>';
                 
-                // Add 7-Day Trend with Sparkline
-                if (!empty($sparklineData)) {
-                    $trendText = $trend === 'up' ? '📈 UP' : ($trend === 'down' ? '📉 DOWN' : '➡️ FLAT');
-                    $trendClass = $trend === 'up' ? 'trend-up' : ($trend === 'down' ? 'trend-down' : 'trend-flat');
-                    $change7dSign = $sevenDayChange > 0 ? '+' : '';
-                    
-                    echo '<div class="trend-container">';
-                    echo '<div class="spark-wrapper" id="sparkline-container"></div>';
-                    echo '<span class="info" style="margin-top:0;">7-Day Change: ' . $change7dSign . '$' . number_format(abs($sevenDayChange), 2) . ' (' . $change7dSign . number_format($sevenDayChangePct, 2) . '%)</span>';
-                    echo '</div>';
-                    // Add this after the sparkline container, inside the <div class="trend-container">
-echo '<div style="display:inline-flex; align-items:center; margin-left:10px; flex-wrap:wrap; gap:10px;">';
-echo '<iframe src="stock_rating_growth.php?symbol=' . urlencode($symbol) . '&compact" 
-        style="width:250px; height:30px; border:none; overflow:hidden;" 
-        scrolling="no" 
-        frameborder="0">
-</iframe>';
-// Use the original query (which might be an ISIN) instead of the resolved symbol
-$badge_query = $query; // $query is the original user input (JP3756600007)
-echo '<iframe src="/other/extra/fetchdata/2026-05-13-Finance/2026-05-13-Stocks/xchangemarket_badge.php?q=' . urlencode($badge_query) . '" style="width:250px; height:30px; border:none; overflow:hidden;" scrolling="no" frameborder="0" sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-modals" referrerpolicy="no-referrer-when-downgrade"> </iframe>';
-echo '</div>';
-                    // Pass sparkline data to JavaScript
-                    echo '<script>';
-                    echo 'const sparklineData_' . md5($symbol) . ' = ' . json_encode($sparklineData) . ';';
-                    echo 'const sparklineTrend_' . md5($symbol) . ' = "' . $trend . '";';
-                    echo 'const container = document.querySelector("#sparkline-container");';
-                    echo 'if(container && typeof generateSparkline === "function") {';
-                    echo '  container.innerHTML = generateSparkline(sparklineData_' . md5($symbol) . ', sparklineTrend_' . md5($symbol) . ');';
-                    echo '}';
-                    echo '</script>';
-                } else {
-                    echo '<div class="info">7-Day Trend: No data available</div>';
-                }
+// Add 7-Day Trend with Sparkline
+if (!empty($sparklineData)) {
+    $trendText = $trend === 'up' ? '📈 UP' : ($trend === 'down' ? '📉 DOWN' : '➡️ FLAT');
+    $change7dSign = $sevenDayChange > 0 ? '+' : '';
+    
+    // Generate SVG directly
+    $min = min($sparklineData);
+    $max = max($sparklineData);
+    $range = $max - $min ?: 1;
+    $height = 30;
+    $width = 100;
+    $step = $width / (count($sparklineData) - 1);
+    $points = [];
+    foreach ($sparklineData as $i => $value) {
+        $x = $i * $step;
+        $y = $height - (($value - $min) / $range * $height);
+        $points[] = "$x,$y";
+    }
+    $color = $trend === 'up' ? '#28a745' : ($trend === 'down' ? '#dc3545' : '#6c757d');
+    
+    echo '<div class="trend-container">';
+    echo '<div class="spark-wrapper" style="display:flex; align-items:center; gap:8px; cursor:pointer;" onclick="window.open(\'sparkline.php?symbol=' . urlencode($symbol) . '&timespan=6month\', \'_blank\')">';
+    echo '<svg width="100" height="30" style="display:inline-block; vertical-align:middle;">';
+    echo '<polyline points="' . implode(' ', $points) . '" fill="none" stroke="' . $color . '" stroke-width="2"/>';
+    echo '</svg>';
+    echo '</div>';
+    echo '<span class="info" style="margin-top:0;">7-Day Change: ' . $change7dSign . number_format(abs($sevenDayChange), 2) . ' (' . $change7dSign . number_format($sevenDayChangePct, 2) . '%) ' . $trendText . '</span>';
+    echo '</div>';
+    
+    // Add the other iframes
+    echo '<div style="display:inline-flex; align-items:center; margin-left:10px; flex-wrap:wrap; gap:10px;">';
+    echo '<iframe src="stock_rating_growth.php?symbol=' . urlencode($symbol) . '&compact" 
+            style="width:250px; height:30px; border:none; overflow:hidden;" 
+            scrolling="no" 
+            frameborder="0">
+    </iframe>';
+    $badge_query = $query;
+    echo '<iframe src="xchangemarket_badge.php?q=' . urlencode($badge_query) . '" style="width:250px; height:30px; border:none; overflow:hidden;" scrolling="no" frameborder="0" sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-modals" referrerpolicy="no-referrer-when-downgrade"> </iframe>';
+    echo '</div>';
+} else {
+    echo '<div class="info">7-Day Trend: No data available</div>';
+}
                 
                 echo '<div class="info">Exchange: ' . htmlspecialchars($exchangeName) . '</div>';
 

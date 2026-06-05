@@ -643,20 +643,23 @@ $(document).ready(function(){
                     $googleSymbol = preg_replace('/\.[^.]+$/', '', $symbol);
                     
                     // Get 7-day trend data
-                    $trendData = isset($sevenDayTrends[$symbol]) ? $sevenDayTrends[$symbol] : null;
-                    $trendHtml = '';
-                    if ($trendData) {
-                        $trendClass = $trendData['trend'] === 'up' ? 'trend-up' : ($trendData['trend'] === 'down' ? 'trend-down' : '');
-                        $changeSign = $trendData['change'] > 0 ? '+' : '';
-                        $trendHtml = '<div class="spark-wrapper">
-                                        ' . $trendData['sparkline'] . '
-                                        <span class="' . $trendClass . '" style="font-size: 11px;">
-                                            ' . $changeSign . number_format($trendData['change_pct'], 1) . '% ' . $trendData['trend_text'] . '
-                                        </span>
-                                      </div>';
-                    } else {
-                        $trendHtml = '<span style="color:#999;">N/A</span>';
-                    }
+$trendData = isset($sevenDayTrends[$symbol]) ? $sevenDayTrends[$symbol] : null;
+$trendHtml = '';
+if ($trendData) {
+    $trendClass = $trendData['trend'] === 'up' ? 'trend-up' : ($trendData['trend'] === 'down' ? 'trend-down' : '');
+    $changeSign = $trendData['change'] > 0 ? '+' : '';
+    $trendHtml = '<div class="spark-wrapper" style="cursor:pointer;" onclick="var spark7d=this.querySelector(\'.spark-7d\'); var iframeDiv=this.querySelector(\'.iframe-div\'); var percentSpan=this.querySelector(\'.percent-text\'); if(iframeDiv.style.display===\'none\'){spark7d.style.display=\'none\'; iframeDiv.style.display=\'block\'; percentSpan.innerHTML=\'' . $changeSign . number_format($trendData['change_pct'], 1) . '% \'; iframeDiv.innerHTML=\'<iframe src=\\\'sparkline.php?symbol=' . urlencode($symbol) . '&timespan=6month\\\' style=\\\'width:300px; height:100px; border:none; transform:scale(0.50); transform-origin:0 0; overflow:hidden;\\\' scrolling=\\\'no\\\'></iframe>\';}else{spark7d.style.display=\'flex\'; iframeDiv.style.display=\'none\'; percentSpan.innerHTML=\'' . $changeSign . number_format($trendData['change_pct'], 1) . '% ' . $trendData['trend_text'] . '\'; iframeDiv.innerHTML=\'\';}">
+                        <div class="spark-7d" style="display:flex; align-items:center; gap:8px;">
+                            ' . $trendData['sparkline'] . '
+                            <span class="' . $trendClass . ' percent-text" style="font-size: 11px;">
+                                ' . $changeSign . number_format($trendData['change_pct'], 1) . '% ' . $trendData['trend_text'] . '
+                            </span>
+                        </div>
+                        <div class="iframe-div" style="display:none;"></div>
+                  </div>';
+} else {
+    $trendHtml = '<span style="color:#999;">N/A</span>';
+}
                 ?>
                 <tr class="<?php echo $rowClass; ?>">
                     <td style="vertical-align: middle;">
