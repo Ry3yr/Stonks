@@ -1,3 +1,9 @@
+<?php
+if (ob_get_level()) ob_end_clean();
+header('Content-Type: text/html; charset=utf-8');
+header('X-Accel-Buffering: no');
+?>
+<meta charset="utf-8">
 <script src="/jquery.min.js"></script>
 <script src="stockattributesdisplay.js"></script>
 <script type="text/javascript">
@@ -24,7 +30,6 @@ $(document).ready(function(){
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Stock Portfolio - Live Values</title>
     <style>
-        /* your existing CSS (unchanged) */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: Arial, sans-serif; background: #f0f2f5; padding: 20px; }
         .container { max-width: 1400px; margin: 0 auto; }
@@ -77,7 +82,7 @@ $(document).ready(function(){
         .stock-symbol-wrapper { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; }
         .trend-up { color: #28a745; font-weight: bold; }
         .trend-down { color: #dc3545; font-weight: bold; }
-        .spark-wrapper { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        .spark-wrapper { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; cursor: pointer; }
         .trend-cell { white-space: nowrap; }
     </style>
 </head>
@@ -99,16 +104,14 @@ $(document).ready(function(){
         'GBP' => ['symbol' => '£', 'code' => 'GBP', 'decimals' => 2],
         'HKD' => ['symbol' => 'HK$', 'code' => 'HKD', 'decimals' => 2],
         'CNY' => ['symbol' => 'CN¥', 'code' => 'CNY', 'decimals' => 2],
-        'SEK' => ['symbol' => 'kr', 'code' => 'SEK', 'decimals' => 2],   // <-- ADDED
-        'BRL' => ['symbol' => 'R$', 'code' => 'BRL', 'decimals' => 2], // <-- ADD THIS
-        'MXN' => ['symbol' => 'MX$', 'code' => 'MXN', 'decimals' => 2]    // <-- ADDED
+        'SEK' => ['symbol' => 'kr', 'code' => 'SEK', 'decimals' => 2],
+        'BRL' => ['symbol' => 'R$', 'code' => 'BRL', 'decimals' => 2],
+        'MXN' => ['symbol' => 'MX$', 'code' => 'MXN', 'decimals' => 2]
     ];
     
-    // Default exchange rates (will be updated from API)
     $DEFAULT_RATES = [
         'USD' => 1, 'EUR' => 0.92, 'JPY' => 148.5, 'GBP' => 0.79, 'HKD' => 7.82,
-        'CNY' => 7.24, 'SEK' => 10.45, 'MXN' => 16.80 ,  // <-- ADDED
-        'BRL' => 5.80 // <-- ADD THIS (approximate exchange rate)
+        'CNY' => 7.24, 'SEK' => 10.45, 'MXN' => 16.80, 'BRL' => 5.80
     ];
     
     function curl_get($url) {
@@ -143,28 +146,23 @@ $(document).ready(function(){
     
     function getCurrencyInfo($currencyCode) {
         global $CURRENCY_CONFIG;
-        // Map common symbols to currency codes
         $symbolMap = [
             '$' => 'USD', '€' => 'EUR', '¥' => 'JPY', '£' => 'GBP',
             'HK$' => 'HKD', 'CN¥' => 'CNY', 'kr' => 'SEK', 'MX$' => 'MXN'
         ];
         
-        // If input is a symbol, convert to currency code
         if (isset($symbolMap[$currencyCode])) {
             $currencyCode = $symbolMap[$currencyCode];
         }
         
-        // Return config if exists, otherwise default to USD
         if (isset($CURRENCY_CONFIG[$currencyCode])) {
             return $CURRENCY_CONFIG[$currencyCode];
         }
         
-        // Handle special case for 'kr' (could be SEK, NOK, DKK) - default to SEK
         if ($currencyCode === 'kr') {
             return $CURRENCY_CONFIG['SEK'];
         }
         
-        // Fallback
         return ['symbol' => '$', 'code' => 'USD', 'decimals' => 2];
     }
     
@@ -184,7 +182,6 @@ $(document).ready(function(){
         return $symbol . number_format($amount, $decimals);
     }
     
-    // NEW: Get live price with original currency info
     function getLivePriceWithCurrency($symbol, $exchangeRates) {
         $url = "https://query1.finance.yahoo.com/v8/finance/chart/" . urlencode($symbol);
         $response = curl_get($url);
@@ -195,12 +192,10 @@ $(document).ready(function(){
                 $price = $data['chart']['result'][0]['meta']['regularMarketPrice'];
                 $currency = strtoupper($data['chart']['result'][0]['meta']['currency'] ?? 'USD');
                 
-                // Convert to USD for consistent comparison
                 $priceUSD = $price;
                 if ($currency !== 'USD' && isset($exchangeRates[$currency]) && $exchangeRates[$currency] > 0) {
                     $priceUSD = $price / $exchangeRates[$currency];
                 } elseif ($currency !== 'USD' && !isset($exchangeRates[$currency])) {
-                    // Unknown currency - log and default to USD
                     error_log("Unknown currency: $currency for symbol $symbol");
                     $priceUSD = $price;
                     $currency = 'USD';
@@ -216,13 +211,6 @@ $(document).ready(function(){
         return null;
     }
     
-    // Legacy function for backward compatibility
-    function getLivePriceUSD($symbol, $exchangeRates) {
-        $data = getLivePriceWithCurrency($symbol, $exchangeRates);
-        return $data ? $data['price_usd'] : null;
-    }
-    
-    // Get 7-day trend data for a symbol
     function get7DayTrend($symbol, $exchangeRates) {
         $url = "https://query1.finance.yahoo.com/v8/finance/chart/" . urlencode($symbol) . "?range=7d&interval=1d";
         $response = curl_get($url);
@@ -247,7 +235,6 @@ $(document).ready(function(){
         $changePct = ($change / $oldPrice) * 100;
         $trend = $change > 0 ? 'up' : ($change < 0 ? 'down' : 'flat');
         
-        // Generate sparkline
         $min = min($validCloses);
         $max = max($validCloses);
         $range = $max - $min ?: 1;
@@ -277,16 +264,14 @@ $(document).ready(function(){
     }
     
     function fetchExchangeInfo($symbol) {
-        // First, check for exchange suffix in symbol itself
         $symbolUpper = strtoupper($symbol);
         
-        // Direct symbol suffix mapping (most reliable)
         if (substr($symbolUpper, -3) == '.HK') {
             return ['display' => 'Hong Kong', 'code' => 'HKG'];
         }
-            if (substr($symbolUpper, -3) == '.SA') {
-        return ['display' => 'B3 - São Paulo', 'code' => 'BVMF'];
-    }
+        if (substr($symbolUpper, -3) == '.SA') {
+            return ['display' => 'B3 - São Paulo', 'code' => 'BVMF'];
+        }
         if (substr($symbolUpper, -3) == '.L') {
             return ['display' => 'London', 'code' => 'LON'];
         }
@@ -299,12 +284,10 @@ $(document).ready(function(){
         if (substr($symbolUpper, -3) == '.MX') {
             return ['display' => 'Mexico', 'code' => 'MEX'];
         }
-        // Handle BMV suffix or :BMV
         if (strpos($symbolUpper, '.BMV') !== false || strpos($symbolUpper, ':BMV') !== false) {
             return ['display' => 'Mexico', 'code' => 'MEX'];
         }
         
-        // Fallback to API lookup for other symbols
         $url = "https://query1.finance.yahoo.com/v1/finance/search?q=" . urlencode($symbol) . "&quotesCount=5&newsCount=0";
         $response = curl_get($url);
         
@@ -320,27 +303,18 @@ $(document).ready(function(){
                         $exchangeDisplay = $quote['exchDisp'] ?? $rawExchange;
                         
                         $exchangeMap = [
-                            'PNK' => 'OTCMKTS',
-                            'NYQ' => 'NYSE',
-                            'NYM' => 'NYSE',
-                            'ASE' => 'AMEX',
-                            'TYO' => 'TYO',
-                            'LON' => 'LON',
-                            'FRA' => 'FRA',
-                            'HKG' => 'HKG',
-                            'MEX' => 'MEX',
-                            'BMV' => 'MEX',
-                            'HKE' => 'HKG',
+                            'PNK' => 'OTCMKTS', 'NYQ' => 'NYSE', 'NYM' => 'NYSE',
+                            'ASE' => 'AMEX', 'TYO' => 'TYO', 'LON' => 'LON',
+                            'FRA' => 'FRA', 'HKG' => 'HKG', 'MEX' => 'MEX',
+                            'BMV' => 'MEX', 'HKE' => 'HKG',
                         ];
                         
                         $exchangeCode = $exchangeMap[$rawExchange] ?? $rawExchange;
                         
-                        // Clean up display name for Hong Kong
                         if (strpos($exchangeDisplay, 'Hong Kong') !== false || $exchangeCode == 'HKG') {
                             $exchangeDisplay = 'Hong Kong';
                             $exchangeCode = 'HKG';
                         }
-                        // Clean up for Mexico
                         if (strpos($exchangeDisplay, 'Mexico') !== false || $exchangeCode == 'MEX' || $rawExchange == 'MEX') {
                             $exchangeDisplay = 'Mexico';
                             $exchangeCode = 'MEX';
@@ -354,7 +328,6 @@ $(document).ready(function(){
         return ['display' => $exchangeDisplay, 'code' => $exchangeCode];
     }
     
-    // Read search buttons from searchengs.txt
     function getSearchButtons() {
         $txtFile = __DIR__ . '/searchengs.txt';
         $buttons = [];
@@ -375,7 +348,6 @@ $(document).ready(function(){
         return $buttons;
     }
     
-    // Helper function to get depot icon HTML
     function getDepotIcon($depotName) {
         if (empty($depotName)) return '';
         
@@ -410,84 +382,25 @@ $(document).ready(function(){
         return $b['saved_at'] - $a['saved_at'];
     });
     
-    $uniqueSymbols = array_unique(array_column($stocks, 'stock'));
-    $livePricesUSD = [];
-    $liveOriginalCurrencies = [];
-    $liveOriginalPrices = [];
-    $sevenDayTrends = [];
-    
-    foreach ($uniqueSymbols as $symbol) {
-        $priceData = getLivePriceWithCurrency($symbol, $exchangeRates);
-        if ($priceData) {
-            $livePricesUSD[$symbol] = $priceData['price_usd'];
-            $liveOriginalCurrencies[$symbol] = $priceData['original_currency'];
-            $liveOriginalPrices[$symbol] = $priceData['original_price'];
-        }
-        
-        // Fetch 7-day trend for each symbol
-        $trend = get7DayTrend($symbol, $exchangeRates);
-        if ($trend) $sevenDayTrends[$symbol] = $trend;
-        
-        usleep(100000);
+    // Build fetch order: isin+nrbght first, then rest
+    $fetchOrderPriority = [];
+    $fetchOrderNormal = [];
+    $seenOrder = [];
+    foreach ($stocks as $_s) {
+        $sym = $_s['stock'];
+        if (isset($seenOrder[$sym])) continue;
+        $seenOrder[$sym] = true;
+        if (!empty($_s['isin']) && !empty($_s['nrbght']) && $_s['nrbght'] > 0)
+            $fetchOrderPriority[] = $_s;
+        else
+            $fetchOrderNormal[] = $_s;
     }
+    $fetchQueue = array_merge($fetchOrderPriority, $fetchOrderNormal);
     
-    $latestBySymbol = [];
-    foreach ($stocks as $stock) {
-        $symbol = $stock['stock'];
-        if (!isset($latestBySymbol[$symbol]) || $stock['saved_at'] > $latestBySymbol[$symbol]['saved_at']) {
-            $latestBySymbol[$symbol] = $stock;
-        }
-    }
-    
-    $changes = [];
-    foreach ($latestBySymbol as $symbol => $saved) {
-        if (isset($livePricesUSD[$symbol])) {
-            $savedPrice = $saved['price'];
-            $savedCurrency = $saved['currency'];
-            $livePriceUSD = $livePricesUSD[$symbol];
-            
-            $livePriceConverted = convertCurrency($livePriceUSD, 'USD', $savedCurrency, $exchangeRates);
-            
-            $diff = $livePriceConverted - $savedPrice;
-            $diffPercent = ($savedPrice > 0) ? ($diff / $savedPrice) * 100 : 0;
-            
-            $changes[$symbol] = [
-                'symbol' => $symbol,
-                'saved_price' => $savedPrice,
-                'saved_currency' => $savedCurrency,
-                'live_price' => $livePriceConverted,
-                'live_price_usd' => $livePriceUSD,
-                'diff' => $diff,
-                'diff_percent' => $diffPercent
-            ];
-        }
-    }
-    
-    $winners = array_filter($changes, function($item) {
-        return $item['diff'] > 0;
-    });
-    $losers = array_filter($changes, function($item) {
-        return $item['diff'] < 0;
-    });
-    
-    usort($winners, function($a, $b) {
-        return $b['diff_percent'] <=> $a['diff_percent'];
-    });
-    usort($losers, function($a, $b) {
-        return $a['diff_percent'] <=> $b['diff_percent'];
-    });
-    
-    // Market to code mapping for Google Finance links
     $marketToCode = [
-        'OTC Markets' => 'OTCMKTS',
-        'NASDAQ' => 'NASDAQ',
-        'NYSE' => 'NYSE',
-        'Tokyo' => 'TYO',
-        'London' => 'LON',
-        'XETRA' => 'FRA',
-        'Hong Kong' => 'HKG',
-        'HongKong' => 'HKG',
-        'Mexico' => 'MEX',
+        'OTC Markets' => 'OTCMKTS', 'NASDAQ' => 'NASDAQ', 'NYSE' => 'NYSE',
+        'Tokyo' => 'TYO', 'London' => 'LON', 'XETRA' => 'FRA',
+        'Hong Kong' => 'HKG', 'HongKong' => 'HKG', 'Mexico' => 'MEX',
         'B3 - São Paulo' => 'BVMF'
     ];
     ?>
@@ -495,55 +408,18 @@ $(document).ready(function(){
     <div class="highlights">
         <div class="winners-box">
             <h2>Biggest Winners</h2>
-            <?php if (empty($winners)): ?>
-                <div class="no-data">No winners yet.</div>
-            <?php else: ?>
-                <?php foreach (array_slice($winners, 0, 5) as $winner): ?>
-                    <div class="winner-item">
-                        <div>
-                            <strong><?php echo htmlspecialchars($winner['symbol']); ?></strong>
-                            <span class="timestamp">
-                                <?php echo formatCurrency($winner['saved_price'], $winner['saved_currency'], $exchangeRates); ?> 
-                                → 
-                                <?php echo formatCurrency($winner['live_price'], $winner['saved_currency'], $exchangeRates); ?>
-                            </span>
-                        </div>
-                        <div class="winner-change">
-                            +<?php echo formatCurrency($winner['diff'], $winner['saved_currency'], $exchangeRates); ?> (+<?php echo number_format($winner['diff_percent'], 2); ?>%)
-                        </div>
-                    </div>
-                <?php endforeach; ?>
-            <?php endif; ?>
+            <div id="winners-content"><div class="no-data">Loading...</div></div>
         </div>
         
         <div class="losers-box">
             <h2>Biggest Losers</h2>
-            <?php if (empty($losers)): ?>
-                <div class="no-data">No losers yet.</div>
-            <?php else: ?>
-                <?php foreach (array_slice($losers, 0, 5) as $loser): ?>
-                    <div class="loser-item">
-                        <div>
-                            <strong><?php echo htmlspecialchars($loser['symbol']); ?></strong>
-                            <span class="timestamp">
-                                <?php echo formatCurrency($loser['saved_price'], $loser['saved_currency'], $exchangeRates); ?> 
-                                → 
-                                <?php echo formatCurrency($loser['live_price'], $loser['saved_currency'], $exchangeRates); ?>
-                            </span>
-                        </div>
-                        <div class="loser-change">
-                            <?php echo formatCurrency($loser['diff'], $loser['saved_currency'], $exchangeRates); ?> (<?php echo number_format($loser['diff_percent'], 2); ?>%)
-                        </div>
-                    </div>
-                <?php endforeach; ?>
-            <?php endif; ?>
+            <div id="losers-content"><div class="no-data">Loading...</div></div>
         </div>
     </div>
     
     <div class="all-stocks">
         <h2>All Saved Stocks - [<a href="stockvalues.php?bought">BOUGHT</a>]</h2>
         <?php
-        // Debug: Check if buttons are being loaded
         $debugButtons = getSearchButtons();
         if (count($debugButtons) > 0) {
             echo '<div style="background:#e8f4f8; padding:5px 10px; margin-bottom:10px; font-size:12px; border-radius:5px;">🔍 Custom search buttons loaded: ' . count($debugButtons) . ' (<strong>' . htmlspecialchars($debugButtons[0]['label']) . '</strong>)</div>';
@@ -571,13 +447,6 @@ $(document).ready(function(){
                     $symbol = $stock['stock'];
                     $savedPrice = $stock['price'];
                     $savedCurrency = $stock['currency'];
-                    $livePriceUSD = isset($livePricesUSD[$symbol]) ? $livePricesUSD[$symbol] : null;
-                    $liveOriginalCurrency = isset($liveOriginalCurrencies[$symbol]) ? $liveOriginalCurrencies[$symbol] : null;
-                    $liveOriginalPrice = isset($liveOriginalPrices[$symbol]) ? $liveOriginalPrices[$symbol] : null;
-                    $livePriceConverted = null;
-                    $diff = null;
-                    $diffClass = '';
-                    $diffIndicator = '';
                     $hasExchange = isset($stock['exchange_market']) && !empty($stock['exchange_market']);
                     $exchangeMarket = $hasExchange ? $stock['exchange_market'] : '';
                     
@@ -587,13 +456,11 @@ $(document).ready(function(){
                     $quantity = $hasQuantity ? $stock['nrbght'] : 0;
                     $isin = $hasIsin ? $stock['isin'] : '';
                     
-                    // Get depot value for icon
                     $depotName = isset($stock['depot']) ? $stock['depot'] : '';
                     $depotIconHtml = getDepotIcon($depotName);
                     
                     $exchangeCode = '';
                     $exchangeDisplay = '';
-                    $isExchangeCached = $hasExchange;
                     
                     if (!$hasExchange) {
                         $exchangeInfo = fetchExchangeInfo($symbol);
@@ -601,7 +468,6 @@ $(document).ready(function(){
                         $exchangeCode = $exchangeInfo['code'];
                     } else {
                         $exchangeDisplay = $exchangeMarket;
-                        
                         if (isset($marketToCode[$exchangeMarket])) {
                             $exchangeCode = $marketToCode[$exchangeMarket];
                         } else {
@@ -609,59 +475,10 @@ $(document).ready(function(){
                         }
                     }
                     
-                    $totalPl = 0;
-                    $totalPlPercent = 0;
-                    
-                    if ($livePriceUSD && $hasQuantity) {
-                        $livePriceConverted = convertCurrency($livePriceUSD, 'USD', $savedCurrency, $exchangeRates);
-                        $diff = $livePriceConverted - $savedPrice;
-                        $totalPl = $diff * $quantity;
-                        $totalPlPercent = ($savedPrice > 0) ? ($diff / $savedPrice) * 100 : 0;
-                        
-                        if ($diff > 0) {
-                            $diffClass = 'price-up';
-                            $diffIndicator = '+ ';
-                        } elseif ($diff < 0) {
-                            $diffClass = 'price-down';
-                            $diffIndicator = '- ';
-                        }
-                    } elseif ($livePriceUSD) {
-                        $livePriceConverted = convertCurrency($livePriceUSD, 'USD', $savedCurrency, $exchangeRates);
-                        $diff = $livePriceConverted - $savedPrice;
-                        if ($diff > 0) {
-                            $diffClass = 'price-up';
-                            $diffIndicator = '+ ';
-                        } elseif ($diff < 0) {
-                            $diffClass = 'price-down';
-                            $diffIndicator = '- ';
-                        }
-                    }
-                    
                     $rowClass = $hasPurchaseData ? 'stock-with-data' : '';
-                    
-                    // Remove .de or .DE from symbol for Google Finance link
                     $googleSymbol = preg_replace('/\.[^.]+$/', '', $symbol);
-                    
-                    // Get 7-day trend data
-$trendData = isset($sevenDayTrends[$symbol]) ? $sevenDayTrends[$symbol] : null;
-$trendHtml = '';
-if ($trendData) {
-    $trendClass = $trendData['trend'] === 'up' ? 'trend-up' : ($trendData['trend'] === 'down' ? 'trend-down' : '');
-    $changeSign = $trendData['change'] > 0 ? '+' : '';
-    $trendHtml = '<div class="spark-wrapper" style="cursor:pointer;" onclick="var spark7d=this.querySelector(\'.spark-7d\'); var iframeDiv=this.querySelector(\'.iframe-div\'); var percentSpan=this.querySelector(\'.percent-text\'); if(iframeDiv.style.display===\'none\'){spark7d.style.display=\'none\'; iframeDiv.style.display=\'block\'; percentSpan.innerHTML=\'' . $changeSign . number_format($trendData['change_pct'], 1) . '% \'; iframeDiv.innerHTML=\'<iframe src=\\\'sparkline.php?symbol=' . urlencode($symbol) . '&timespan=6month\\\' style=\\\'width:300px; height:100px; border:none; transform:scale(0.50); transform-origin:0 0; overflow:hidden;\\\' scrolling=\\\'no\\\'></iframe>\';}else{spark7d.style.display=\'flex\'; iframeDiv.style.display=\'none\'; percentSpan.innerHTML=\'' . $changeSign . number_format($trendData['change_pct'], 1) . '% ' . $trendData['trend_text'] . '\'; iframeDiv.innerHTML=\'\';}">
-                        <div class="spark-7d" style="display:flex; align-items:center; gap:8px;">
-                            ' . $trendData['sparkline'] . '
-                            <span class="' . $trendClass . ' percent-text" style="font-size: 11px;">
-                                ' . $changeSign . number_format($trendData['change_pct'], 1) . '% ' . $trendData['trend_text'] . '
-                            </span>
-                        </div>
-                        <div class="iframe-div" style="display:none;"></div>
-                  </div>';
-} else {
-    $trendHtml = '<span style="color:#999;">N/A</span>';
-}
                 ?>
-                <tr class="<?php echo $rowClass; ?>">
+                <tr class="<?php echo $rowClass; ?>" id="row-<?php echo htmlspecialchars($symbol, ENT_QUOTES); ?>">
                     <td style="vertical-align: middle;">
                         <div class="stock-symbol-wrapper">
                             <span class="stock-name-bold"><?php echo htmlspecialchars($symbol); ?></span>
@@ -683,48 +500,10 @@ if ($trendData) {
                             <?php endif; ?>
                         </div>
                     </td>
-                    <td class="<?php echo $diffClass; ?>" style="vertical-align: middle;">
-                        <?php if ($livePriceConverted !== null): ?>
-                            <?php echo formatCurrency($livePriceConverted, $savedCurrency, $exchangeRates); ?>
-                            <span class="saved-original">
-                                <?php 
-                                if ($liveOriginalCurrency && $liveOriginalPrice) {
-                                    $origSymbol = getCurrencyInfo($liveOriginalCurrency)['symbol'];
-                                    echo '(' . $liveOriginalCurrency . ' ' . $origSymbol . number_format($liveOriginalPrice, 2) . ')';
-                                } else {
-                                    echo '(USD $' . number_format($livePriceUSD, 2) . ')';
-                                }
-                                ?>
-                            </span>
-                        <?php else: ?>
-                            <span class="price-neutral">N/A</span>
-                        <?php endif; ?>
-                    </td>
-                    <td class="<?php echo $diffClass; ?>" style="vertical-align: middle;">
-                        <?php if ($diff !== null): ?>
-                            <?php echo $diffIndicator . formatCurrency(abs($diff), $savedCurrency, $exchangeRates) . ' (' . number_format(abs(($diff / $savedPrice) * 100), 2) . '%)'; ?>
-                        <?php else: ?>
-                            --
-                        <?php endif; ?>
-                    </td>
-                    <td style="vertical-align: middle;">
-                        <?php if ($hasQuantity && $diff !== null): ?>
-                            <?php if ($totalPl > 0): ?>
-                                <span class="pl-positive">+<?php echo formatCurrency($totalPl, $savedCurrency, $exchangeRates); ?> (+<?php echo number_format($totalPlPercent, 2); ?>%)</span>
-                            <?php elseif ($totalPl < 0): ?>
-                                <span class="pl-negative"><?php echo formatCurrency($totalPl, $savedCurrency, $exchangeRates); ?> (<?php echo number_format($totalPlPercent, 2); ?>%)</span>
-                            <?php else: ?>
-                                <span class="price-neutral"><?php echo formatCurrency(0, $savedCurrency, $exchangeRates); ?> (0%)</span>
-                            <?php endif; ?>
-                        <?php elseif ($hasQuantity && $diff === null): ?>
-                            <span class="price-neutral">N/A</span>
-                        <?php else: ?>
-                            <span class="price-neutral" style="font-size:11px;">(use "buy")</span>
-                        <?php endif; ?>
-                    </td>
-                    <td class="trend-cell" style="vertical-align: middle;">
-                        <?php echo $trendHtml; ?>
-                    </td>
+                    <td id="lp-<?php echo htmlspecialchars($symbol, ENT_QUOTES); ?>" style="vertical-align:middle;"><span class="fetching">⏳</span></td>
+                    <td id="lc-<?php echo htmlspecialchars($symbol, ENT_QUOTES); ?>" style="vertical-align:middle;"><span class="fetching">⏳</span></td>
+                    <td id="pl-<?php echo htmlspecialchars($symbol, ENT_QUOTES); ?>" style="vertical-align:middle;"><?php if (!$hasQuantity): ?><span class="price-neutral" style="font-size:11px;">(use "buy")</span><?php else: ?><span class="fetching">⏳</span><?php endif; ?></td>
+                    <td id="tr-<?php echo htmlspecialchars($symbol, ENT_QUOTES); ?>" class="trend-cell" style="vertical-align:middle;"><span class="fetching">⏳</span></td>
                     <td class="timestamp" style="vertical-align: middle;"><?php echo htmlspecialchars($stock['date']); ?></td>
                     <td style="vertical-align: middle;" class="exchange-cell">
                         <?php if ($hasExchange): ?>
@@ -740,15 +519,10 @@ if ($trendData) {
                             <a href="https://www.google.com/finance/quote/<?php echo urlencode($googleSymbol); ?>:<?php echo urlencode($exchangeCode); ?>" target="_blank" class="google-link">G</a>
                             
                             <?php 
-                            // Add buttons from searchengs.txt
                             $searchButtons = getSearchButtons();
                             foreach ($searchButtons as $btn): 
                             ?>
-                                <a href="<?php echo htmlspecialchars($btn['file']); ?>?search=<?php echo urlencode($symbol); ?>" 
-                                   target="_blank" 
-                                   class="search-btn">
-                                    <?php echo htmlspecialchars($btn['label']); ?>
-                                </a>
+                                <a href="<?php echo htmlspecialchars($btn['file']); ?>?search=<?php echo urlencode($symbol); ?>" target="_blank" class="search-btn"><?php echo htmlspecialchars($btn['label']); ?></a>
                             <?php endforeach; ?>
                             
                             <?php if ($hasExchange): ?>
@@ -761,15 +535,9 @@ if ($trendData) {
                             
                             <button style="background:#f0b90b; color:#fff; padding:4px 10px; border-radius:4px; font-size:12px; border:none; cursor:pointer;" onclick="window.open('https://www.tradingview.com/chart/?symbol=<?php echo urlencode($symbol); ?>', '_blank');">TrdVw</button>
                             
-                            <button style="background:#6f42c1; color:white; padding:4px 10px; border-radius:4px; font-size:12px; border:none; cursor:pointer;" 
-        onclick="var btn=this; var symbol='<?php echo urlencode($symbol); ?>'; var parent=btn.parentNode; var existing=parent.querySelector('.prdct-iframe-container'); if(existing){existing.remove(); btn.style.display='inline-block';}else{btn.style.display='none'; var container=document.createElement('div'); container.className='prdct-iframe-container'; var iframe=document.createElement('iframe'); iframe.src='stock_rating_growth.php?symbol='+decodeURIComponent(symbol)+'&compact'; iframe.style.border='1px solid #ddd'; iframe.style.borderRadius='4px'; iframe.style.background='white'; iframe.width='110'; iframe.height='30'; container.appendChild(iframe); parent.insertBefore(container, btn.nextSibling);}">
-    prdct
-</button>
+                            <button style="background:#6f42c1; color:white; padding:4px 10px; border-radius:4px; font-size:12px; border:none; cursor:pointer;" onclick="var btn=this; var symbol='<?php echo urlencode($symbol); ?>'; var parent=btn.parentNode; var existing=parent.querySelector('.prdct-iframe-container'); if(existing){existing.remove(); btn.style.display='inline-block';}else{btn.style.display='none'; var container=document.createElement('div'); container.className='prdct-iframe-container'; var iframe=document.createElement('iframe'); iframe.src='stock_rating_growth.php?symbol='+decodeURIComponent(symbol)+'&compact'; iframe.style.border='1px solid #ddd'; iframe.style.borderRadius='4px'; iframe.style.background='white'; iframe.width='110'; iframe.height='30'; container.appendChild(iframe); parent.insertBefore(container, btn.nextSibling);}">prdct</button>
 
-                            <button style="background:#6f02c1; color:white; padding:4px 10px; border-radius:4px; font-size:12px; border:none; cursor:pointer;" 
-        onclick="var btn=this; var symbol='<?php echo urlencode($symbol); ?>'; var parent=btn.parentNode; var existing=parent.querySelector('.hnl-iframe-container'); if(existing){existing.remove(); btn.style.display='inline-block';}else{btn.style.display='none'; var container=document.createElement('div'); container.className='hnl-iframe-container'; var iframe=document.createElement('iframe'); iframe.src='highnlows.php?symbol='+decodeURIComponent(symbol)+'&compact'; iframe.style.border='1px solid #ddd'; iframe.style.borderRadius='4px'; iframe.style.background='white'; iframe.width='180'; iframe.height='28'; container.appendChild(iframe); parent.insertBefore(container, btn.nextSibling);}">
-    h&l
-</button>
+                            <button style="background:#6f02c1; color:white; padding:4px 10px; border-radius:4px; font-size:12px; border:none; cursor:pointer;" onclick="var btn=this; var symbol='<?php echo urlencode($symbol); ?>'; var parent=btn.parentNode; var existing=parent.querySelector('.hnl-iframe-container'); if(existing){existing.remove(); btn.style.display='inline-block';}else{btn.style.display='none'; var container=document.createElement('div'); container.className='hnl-iframe-container'; var iframe=document.createElement('iframe'); iframe.src='highnlows.php?symbol='+decodeURIComponent(symbol)+'&compact'; iframe.style.border='1px solid #ddd'; iframe.style.borderRadius='4px'; iframe.style.background='white'; iframe.width='180'; iframe.height='28'; container.appendChild(iframe); parent.insertBefore(container, btn.nextSibling);}">h&l</button>
                             
                             <button class="delete-btn" onclick="if(confirm('Delete <?php echo htmlspecialchars($symbol); ?>?')) window.location.href='save.php?del=yes&handle=<?php echo urlencode($symbol); ?>'">X</button>
                         </div>
@@ -783,7 +551,7 @@ if ($trendData) {
     
     <footer>
         Live data from Yahoo Finance | Exchange rates from exchangerate-api.com | Green = up, Red = down<br>
-        <strong>7-Day Trend column</strong> shows sparkline + percentage change over last 7 trading days<br>
+        <strong>7-Day Trend column</strong> shows sparkline + percentage change over last 7 trading days (click for 6-month view)<br>
         <strong>Bolded rows</strong> indicate stocks with ISIN and quantity data | Orange badge shows number bought | P&L column shows total profit/loss<br>
         <img src="https://res.cloudinary.com/apideck/image/upload/v1594331712/icons/comdirect-de.jpg" style="width:16px; height:16px; border-radius:50%; vertical-align:middle;"> Comdirect &nbsp;&nbsp;
         <img src="https://e7.pngegg.com/pngimages/396/711/png-clipart-ing-group-ing-vysya-bank-ing-belgium-ing-bank-slaski-bank-mammal-cat-like-mammal-thumbnail.png" style="width:16px; height:16px; border-radius:50%; vertical-align:middle;"> ING-DiBa
@@ -806,3 +574,129 @@ $(document).ready(function() {
 </script>
 </body>
 </html>
+<?php
+flush();
+
+$streamedChanges = [];
+
+foreach ($fetchQueue as $qStock) {
+    $sym = $qStock['stock'];
+    $savedPrice = $qStock['price'];
+    $savedCurrency = $qStock['currency'];
+    $hasQty = !empty($qStock['nrbght']) && $qStock['nrbght'] > 0;
+    $qty = $hasQty ? (int)$qStock['nrbght'] : 0;
+    $idSym = htmlspecialchars($sym, ENT_QUOTES);
+
+    // Live price
+    $priceData = getLivePriceWithCurrency($sym, $exchangeRates);
+    if ($priceData) {
+        $priceUSD = $priceData['price_usd'];
+        $origCurrency = $priceData['original_currency'];
+        $origPrice = $priceData['original_price'];
+        $liveConverted = convertCurrency($priceUSD, 'USD', $savedCurrency, $exchangeRates);
+        $diff = $liveConverted - $savedPrice;
+        $diffPct = $savedPrice > 0 ? ($diff / $savedPrice) * 100 : 0;
+        $diffClass = $diff > 0 ? 'price-up' : ($diff < 0 ? 'price-down' : 'price-neutral');
+        $diffSign = $diff > 0 ? '+ ' : ($diff < 0 ? '- ' : '');
+        $origInfo = getCurrencyInfo($origCurrency);
+
+        $lpHtml = formatCurrency($liveConverted, $savedCurrency, $exchangeRates)
+                . ' <span class="saved-original">(' . $origCurrency . ' ' . $origInfo['symbol'] . number_format($origPrice, $origInfo['decimals']) . ')</span>';
+        $lcHtml = $diffSign . formatCurrency(abs($diff), $savedCurrency, $exchangeRates) . ' (' . number_format(abs($diffPct), 2) . '%)';
+
+        if ($hasQty) {
+            $totalPl = $diff * $qty;
+            if ($totalPl > 0)
+                $plHtml = '<span class="pl-positive">+' . formatCurrency($totalPl, $savedCurrency, $exchangeRates) . ' (+' . number_format($diffPct, 2) . '%)</span>';
+            elseif ($totalPl < 0)
+                $plHtml = '<span class="pl-negative">' . formatCurrency($totalPl, $savedCurrency, $exchangeRates) . ' (' . number_format($diffPct, 2) . '%)</span>';
+            else
+                $plHtml = '<span class="price-neutral">' . formatCurrency(0, $savedCurrency, $exchangeRates) . ' (0%)</span>';
+        }
+
+        // Accumulate for winners/losers
+        if (!isset($streamedChanges[$sym]) || $qStock['saved_at'] > ($streamedChanges[$sym]['saved_at'] ?? 0)) {
+            $streamedChanges[$sym] = [
+                'symbol' => $sym,
+                'saved_price' => $savedPrice,
+                'saved_currency' => $savedCurrency,
+                'live_price' => $liveConverted,
+                'diff' => $diff,
+                'diff_percent' => $diffPct,
+                'saved_at' => $qStock['saved_at'] ?? 0,
+            ];
+        }
+    } else {
+        $diffClass = 'price-neutral';
+        $lpHtml = '<span class="price-neutral">N/A</span>';
+        $lcHtml = '--';
+        if ($hasQty) $plHtml = '<span class="price-neutral">N/A</span>';
+    }
+
+    // 7-day trend
+    $trendData = get7DayTrend($sym, $exchangeRates);
+    if ($trendData) {
+        $trendClass = $trendData['trend'] === 'up' ? 'trend-up' : ($trendData['trend'] === 'down' ? 'trend-down' : '');
+        $changeSign = $trendData['change'] > 0 ? '+' : '';
+        $trendHtml = '<div class="spark-wrapper" style="cursor:pointer;" onclick="var spark7d=this.querySelector(\'.spark-7d\'); var iframeDiv=this.querySelector(\'.iframe-div\'); var percentSpan=this.querySelector(\'.percent-text\'); if(iframeDiv.style.display===\'none\'){spark7d.style.display=\'none\'; iframeDiv.style.display=\'block\'; percentSpan.innerHTML=\'' . $changeSign . number_format($trendData['change_pct'], 1) . '% \'; iframeDiv.innerHTML=\'<iframe src=\\\'sparkline.php?symbol=' . urlencode($sym) . '&timespan=6month\\\' style=\\\'width:300px; height:100px; border:none; transform:scale(0.50); transform-origin:0 0; overflow:hidden;\\\' scrolling=\\\'no\\\'></iframe>\';}else{spark7d.style.display=\'flex\'; iframeDiv.style.display=\'none\'; percentSpan.innerHTML=\'' . $changeSign . number_format($trendData['change_pct'], 1) . '% ' . $trendData['trend_text'] . '\'; iframeDiv.innerHTML=\'\';}">
+                        <div class="spark-7d" style="display:flex; align-items:center; gap:8px;">
+                            ' . $trendData['sparkline'] . '
+                            <span class="' . $trendClass . ' percent-text" style="font-size: 11px;">
+                                ' . $changeSign . number_format($trendData['change_pct'], 1) . '% ' . $trendData['trend_text'] . '
+                            </span>
+                        </div>
+                        <div class="iframe-div" style="display:none;"></div>
+                      </div>';
+    } else {
+        $trendHtml = '<span style="color:#999;">N/A</span>';
+    }
+
+    // Emit script to update this row's cells
+    $lpJs = json_encode($lpHtml);
+    $lcJs = json_encode($lcHtml);
+    $plJs = $hasQty ? json_encode($plHtml) : 'null';
+    $trJs = json_encode($trendHtml);
+    $clsJs = json_encode($diffClass);
+
+    echo "<script>(function(){
+  var lp=document.getElementById('lp-{$idSym}'),lc=document.getElementById('lc-{$idSym}'),pl=document.getElementById('pl-{$idSym}'),tr=document.getElementById('tr-{$idSym}');
+  if(lp){lp.innerHTML={$lpJs};lp.className={$clsJs};lp.style.verticalAlign='middle';}
+  if(lc){lc.innerHTML={$lcJs};lc.className={$clsJs};lc.style.verticalAlign='middle';}
+  if(pl && {$plJs}!==null){pl.innerHTML={$plJs};pl.style.verticalAlign='middle';}
+  if(tr){tr.innerHTML={$trJs};}
+})();</script>\n";
+    flush();
+}
+
+// Update winners/losers boxes after all symbols are loaded
+$winners = array_filter($streamedChanges, function($i){ return $i['diff'] > 0; });
+$losers = array_filter($streamedChanges, function($i){ return $i['diff'] < 0; });
+usort($winners, function($a,$b){ return $b['diff_percent'] <=> $a['diff_percent']; });
+usort($losers, function($a,$b){ return $a['diff_percent'] <=> $b['diff_percent']; });
+
+$winnersHtml = '';
+foreach (array_slice($winners, 0, 5) as $w) {
+    $winnersHtml .= '<div class="winner-item"><div><strong>' . htmlspecialchars($w['symbol']) . '</strong> <span class="timestamp">'
+        . formatCurrency($w['saved_price'], $w['saved_currency'], $exchangeRates) . ' → '
+        . formatCurrency($w['live_price'], $w['saved_currency'], $exchangeRates) . '</span></div>'
+        . '<div class="winner-change">+' . formatCurrency($w['diff'], $w['saved_currency'], $exchangeRates) . ' (+' . number_format($w['diff_percent'], 2) . '%)</div></div>';
+}
+if (!$winnersHtml) $winnersHtml = '<div class="no-data">No winners yet.</div>';
+
+$losersHtml = '';
+foreach (array_slice($losers, 0, 5) as $l) {
+    $losersHtml .= '<div class="loser-item"><div><strong>' . htmlspecialchars($l['symbol']) . '</strong> <span class="timestamp">'
+        . formatCurrency($l['saved_price'], $l['saved_currency'], $exchangeRates) . ' → '
+        . formatCurrency($l['live_price'], $l['saved_currency'], $exchangeRates) . '</span></div>'
+        . '<div class="loser-change">' . formatCurrency($l['diff'], $l['saved_currency'], $exchangeRates) . ' (' . number_format($l['diff_percent'], 2) . '%)</div></div>';
+}
+if (!$losersHtml) $losersHtml = '<div class="no-data">No losers yet.</div>';
+
+$wJs = json_encode($winnersHtml);
+$lJs = json_encode($losersHtml);
+echo "<script>
+  document.getElementById('winners-content').innerHTML = {$wJs};
+  document.getElementById('losers-content').innerHTML = {$lJs};
+</script>\n";
+flush();
+?>
