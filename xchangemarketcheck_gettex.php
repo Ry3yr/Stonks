@@ -1,4 +1,6 @@
 <?php
+ini_set('memory_limit', '512M');
+
 // CORS headers for iframe support
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET');
