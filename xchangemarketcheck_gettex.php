@@ -1,7 +1,4 @@
 <?php
-// Increase memory limit to 512MB
-ini_set('memory_limit', '512M');
-
 // CORS headers for iframe support
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET');
@@ -138,7 +135,7 @@ echo json_encode([
 ]);
 
 /**
- * Check if ISIN exists in Gettex data using streaming (memory optimized)
+ * Check if ISIN exists in Gettex data using cURL (iframe-safe)
  */
 function isIsinInGettex($isin) {
     $cacheFile = __DIR__ . '/gettex_cache.json';
@@ -146,18 +143,61 @@ function isIsinInGettex($isin) {
     
     // Check cache
     if (file_exists($cacheFile)) {
-        $cacheContent = file_get_contents($cacheFile);
-        if ($cacheContent) {
-            $cache = json_decode($cacheContent, true);
-            if ($cache && isset($cache['timestamp']) && (time() - $cache['timestamp']) < $cacheExpiry) {
-                if (isset($cache['data'][$isin])) {
-                    return $cache['data'][$isin];
-                }
+        $cache = json_decode(file_get_contents($cacheFile), true);
+        if ($cache && isset($cache['timestamp']) && (time() - $cache['timestamp']) < $cacheExpiry) {
+            if (isset($cache['data'][$isin])) {
+                return $cache['data'][$isin];
             }
         }
     }
     
-    // Fetch Gettex page with cURL
+    // --- Weekend check (German GMT = UTC+1/UTC+2) ---
+    $now = new DateTime('now', new DateTimeZone('Europe/Berlin'));
+    $dayOfWeek = (int)$now->format('N'); // 1=Mon, 7=Sun
+    $isWeekend = ($dayOfWeek >= 6); // Saturday or Sunday
+    
+    if ($isWeekend) {
+        // Use the weekend URL directly
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, 'https://alcea-wisteria.de/z_files/trading/exchangeplatform/gettex.csv.gz');
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0');
+        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+        $gzContent = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        
+        if ($httpCode === 200 && $gzContent) {
+            $csvContent = gzdecode($gzContent);
+            if ($csvContent && strpos($csvContent, $isin) !== false) {
+                // Cache the positive result
+                $cacheData = ['timestamp' => time(), 'data' => [$isin => true]];
+                file_put_contents($cacheFile, json_encode($cacheData));
+                return true;
+            } elseif ($csvContent) {
+                // Extract all ISINs from weekend CSV for caching
+                preg_match_all('/[A-Z]{2}[A-Z0-9]{9}[0-9]/', $csvContent, $isinMatches);
+                $allIsins = [];
+                if (!empty($isinMatches[0])) {
+                    foreach ($isinMatches[0] as $foundIsin) {
+                        $allIsins[$foundIsin] = true;
+                    }
+                }
+                // Cache all found ISINs + negative result for this ISIN
+                $cacheData = ['timestamp' => time(), 'data' => $allIsins + [$isin => false]];
+                file_put_contents($cacheFile, json_encode($cacheData));
+                return false;
+            }
+        }
+        
+        // If weekend fetch fails, return false (no fallback to weekday data)
+        return false;
+    }
+    
+    // --- Normal weekday logic (unchanged) ---
+    // Fetch Gettex page with cURL (works in iframes)
     $ch = curl_init();
     curl_setopt($ch, CURLOPT_URL, 'https://www.gettex.de/handel/delayed-data/posttrade-data/');
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
@@ -180,79 +220,43 @@ function isIsinInGettex($isin) {
     }
     
     $allIsins = [];
-    
     foreach ($matches[1] as $url) {
-        // Check if ISIN exists in this CSV file using streaming
-        if (streamSearchInGzippedCSV($url, $isin)) {
-            // Cache positive result
-            $cacheData = [
-                'timestamp' => time(), 
-                'data' => [$isin => true]
-            ];
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0');
+        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+        $gzContent = curl_exec($ch);
+        curl_close($ch);
+        
+        if (!$gzContent) continue;
+        
+        $csvContent = gzdecode($gzContent);
+        if (!$csvContent) continue;
+        
+        // Check if our ISIN exists in this CSV
+        if (strpos($csvContent, $isin) !== false) {
+            // Cache the positive result
+            $cacheData = ['timestamp' => time(), 'data' => [$isin => true]];
             file_put_contents($cacheFile, json_encode($cacheData));
             return true;
         }
-    }
-    
-    // Cache negative result
-    $cacheData = [
-        'timestamp' => time(), 
-        'data' => [$isin => false]
-    ];
-    file_put_contents($cacheFile, json_encode($cacheData));
-    
-    return false;
-}
-
-/**
- * Stream a gzipped CSV file line by line and search for ISIN
- * Memory usage: ~1MB regardless of file size
- */
-function streamSearchInGzippedCSV($url, $searchIsin) {
-    $ch = curl_init();
-    curl_setopt($ch, CURLOPT_URL, $url);
-    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-    curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0');
-    curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, false); // Don't buffer in memory
-    
-    // Write to temporary file
-    $tempFile = tmpfile();
-    curl_setopt($ch, CURLOPT_FILE, $tempFile);
-    
-    $success = curl_exec($ch);
-    $error = curl_error($ch);
-    curl_close($ch);
-    
-    if (!$success) {
-        if (is_resource($tempFile)) fclose($tempFile);
-        return false;
-    }
-    
-    // Get temp file path
-    $metaData = stream_get_meta_data($tempFile);
-    $tempFilePath = $metaData['uri'];
-    
-    // Open gzipped file stream
-    $gz = gzopen($tempFilePath, 'rb');
-    if (!$gz) {
-        fclose($tempFile);
-        return false;
-    }
-    
-    // Read line by line (each line is one CSV row)
-    $found = false;
-    while (!gzeof($gz)) {
-        $line = gzgets($gz, 4096); // Read 4KB chunks
-        if (strpos($line, $searchIsin) !== false) {
-            $found = true;
-            break;
+        
+        // Extract all ISINs for caching
+        preg_match_all('/[A-Z]{2}[A-Z0-9]{9}[0-9]/', $csvContent, $isinMatches);
+        if (!empty($isinMatches[0])) {
+            foreach ($isinMatches[0] as $foundIsin) {
+                $allIsins[$foundIsin] = true;
+            }
         }
     }
     
-    gzclose($gz);
-    fclose($tempFile);
+    // Cache all found ISINs + negative result for this ISIN
+    $cacheData = ['timestamp' => time(), 'data' => $allIsins + [$isin => false]];
+    file_put_contents($cacheFile, json_encode($cacheData));
     
-    return $found;
+    return false;
 }
 ?>
