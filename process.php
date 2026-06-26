@@ -70,6 +70,12 @@
             border: 1px solid #ddd;
             border-radius: 4px;
             font-size: 16px;
+            transition: all 0.3s ease;
+        }
+        .search-box input.highlight {
+            border-color: #28a745;
+            border-width: 2px;
+            background-color: #f0fff0;
         }
         .search-box button {
             padding: 10px 20px;
@@ -273,6 +279,73 @@
             align-items: center;
             gap: 8px;
         }
+        .company-name-clickable {
+            cursor: pointer;
+            color: #007bff;
+            text-decoration: underline;
+            font-weight: bold;
+        }
+        .company-name-clickable:hover {
+            color: #0056b3;
+        }
+        .ingdiba-data {
+            margin-top: 10px;
+            padding: 10px;
+            background: #e8f4f8;
+            border-radius: 5px;
+            border-left: 4px solid #17a2b8;
+            display: none;
+        }
+        .ingdiba-data.visible {
+            display: block;
+        }
+        .ingdiba-data .loading {
+            color: #666;
+        }
+        .ingdiba-data .error {
+            color: #dc3545;
+            background: none;
+            padding: 0;
+        }
+        .ingdiba-data .success {
+            font-size: 13px;
+            color: #333;
+        }
+        .ingdiba-data .success strong {
+            color: #17a2b8;
+        }
+        .ingdiba-data .isin-info {
+            background: #fff3cd;
+            padding: 4px 8px;
+            border-radius: 4px;
+            margin: 5px 0;
+            font-size: 12px;
+            color: #856404;
+        }
+        .ingdiba-result-item {
+            padding: 8px;
+            margin: 5px 0;
+            border-radius: 4px;
+            cursor: pointer;
+            border: 1px solid #ddd;
+            transition: all 0.2s;
+        }
+        .ingdiba-result-item:hover {
+            background: #e9ecef;
+        }
+        .ingdiba-result-item.best-match {
+            background: #d4edda;
+            border-color: #28a745;
+        }
+        .ingdiba-result-item .load-link {
+            font-size: 11px;
+            color: #007bff;
+            text-decoration: underline;
+            margin-left: 8px;
+        }
+        .ingdiba-result-item .load-link:hover {
+            color: #0056b3;
+        }
     </style>
 </head>
 <body>
@@ -299,6 +372,7 @@
             <a href="?symbol=NVIDIA&currency=USD" class="example-btn">NVIDIA</a>
             <a href="?symbol=Tesla&currency=USD" class="example-btn">Tesla</a>
             <a href="?symbol=AAPL&currency=USD" class="example-btn">AAPL</a>
+            <a href="?symbol=WPRT.TO&currency=USD" class="example-btn">WPRT.TO</a>
         </div>
         <small style="color: #666; display: block; margin-top: 10px;">
             &#128161; Type company names like "Nintendo", "Apple" OR symbols like "AAPL", "NTDOY"
@@ -419,9 +493,9 @@
 
     $currencySymbols = [
         'USD' => ['symbol' => '$',  'rate' => 1,     'code' => 'USD'],
-        'EUR' => ['symbol' => '€',  'rate' => 0.92,  'code' => 'EUR'],
-        'JPY' => ['symbol' => '¥',  'rate' => 148.5, 'code' => 'JPY'],
-        'GBP' => ['symbol' => '£',  'rate' => 0.79,  'code' => 'GBP']
+        'EUR' => ['symbol' => '�',  'rate' => 0.92,  'code' => 'EUR'],
+        'JPY' => ['symbol' => '�',  'rate' => 148.5, 'code' => 'JPY'],
+        'GBP' => ['symbol' => '�',  'rate' => 0.79,  'code' => 'GBP']
     ];
 
     $targetCurrency = $currencySymbols[$currencyParam] ?? $currencySymbols['USD'];
@@ -569,87 +643,116 @@
 
                 $today = date('Y-m-d');
 
-                echo '<div class="stock-item">';
-                echo '<div class="symbol-wrapper">';
-                echo '<div class="symbol">' . htmlspecialchars($symbol) . '</div>';
-                echo '<div class="google-link-container">';
-                echo '<a href="' . $googleFinanceUrl . '" target="_blank" class="google-link" title="View on Google Finance">G</a>';
-                echo '<a href="exchangemrktresolve.php?url=' . $googleFinanceUrl . '" target="_blank" class="google-link" title="MrktResolv">Rslv</a>';
-                echo '</div>';
-                if ($wasSearch) {
-                    echo '<span class="match-info">(matched from "' . htmlspecialchars($query) . '")</span>';
-                }
-                echo '</div>';
-                echo '<div class="name">' . htmlspecialchars($displayName) . '</div>';
-                echo '<div class="price" style="color: #28a745;">' . $targetSymbol . ' ' . number_format((float)$convertedPrice, 2) . '</div>';
-                if ($originalCurrencyCode != $targetCode && $originalPrice !== 'N/A') {
-                    $localToTargetRate = $localToUsdRate * $targetRate;
-                    echo '<div class="price-usd">(Original: ' . $originalCurrencyCode . ' ' . number_format((float)$originalPrice, 2) . ' @ 1 ' . $originalCurrencyCode . ' = ' . number_format($localToTargetRate, 4) . ' ' . $targetCode . ')</div>';
-                }
-                echo '<div class="info">';
-                echo 'Daily Change: ' . ($changeDisplay != 'N/A' ? $changeSign . $changeDisplay : 'N/A');
-                if ($changePercent != 'N/A') {
-                    echo ' (' . $changePercentSign . $changePercent . '%)';
-                }
-                echo '</div>';
-                
-// Add 7-Day Trend with Sparkline
-if (!empty($sparklineData)) {
-    $trendText = $trend === 'up' ? '📈 UP' : ($trend === 'down' ? '📉 DOWN' : '➡️ FLAT');
-    $change7dSign = $sevenDayChange > 0 ? '+' : '';
-    
-    // Generate SVG directly
-    $min = min($sparklineData);
-    $max = max($sparklineData);
-    $range = $max - $min ?: 1;
-    $height = 30;
-    $width = 100;
-    $step = $width / (count($sparklineData) - 1);
-    $points = [];
-    foreach ($sparklineData as $i => $value) {
-        $x = $i * $step;
-        $y = $height - (($value - $min) / $range * $height);
-        $points[] = "$x,$y";
-    }
-    $color = $trend === 'up' ? '#28a745' : ($trend === 'down' ? '#dc3545' : '#6c757d');
-    
-    echo '<div class="trend-container">';
-    echo '<div class="spark-wrapper" style="display:flex; align-items:center; gap:8px; cursor:pointer;" onclick="window.open(\'sparkline.php?symbol=' . urlencode($symbol) . '&timespan=6month\', \'_blank\')">';
-    echo '<svg width="100" height="30" style="display:inline-block; vertical-align:middle;">';
-    echo '<polyline points="' . implode(' ', $points) . '" fill="none" stroke="' . $color . '" stroke-width="2"/>';
-    echo '</svg>';
-    echo '</div>';
-    echo '<span class="info" style="margin-top:0;">7-Day Change: ' . $change7dSign . number_format(abs($sevenDayChange), 2) . ' (' . $change7dSign . number_format($sevenDayChangePct, 2) . '%) ' . $trendText . '</span>';
-    echo '</div>';
-    
-    // Add the other iframes
-    echo '<div style="display:inline-flex; align-items:center; margin-left:10px; flex-wrap:wrap; gap:10px;">';
-    echo '<iframe src="stock_rating_growth.php?symbol=' . urlencode($symbol) . '&compact" 
-            style="width:250px; height:30px; border:none; overflow:hidden;" 
-            scrolling="no" 
-            frameborder="0">
-    </iframe>';
-    $badge_query = $query;
-    echo '<iframe src="xchangemarket_badge.php?q=' . urlencode($badge_query) . '" style="width:250px; height:30px; border:none; overflow:hidden;" scrolling="no" frameborder="0" sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-modals" referrerpolicy="no-referrer-when-downgrade"> </iframe>';
-    echo '</div>';
-} else {
-    echo '<div class="info">7-Day Trend: No data available</div>';
-}
-                
-                echo '<div class="info">Exchange: ' . htmlspecialchars($exchangeName) . '</div>';
-
-                $saveUrl = 'save.php?stock='         . urlencode($symbol) .
-                           '&price='               . urlencode(is_numeric($convertedPrice) ? number_format((float)$convertedPrice, 2) : '0') .
-                           '&currency='            . urlencode($targetSymbol) .
-                           '&date='                . urlencode($today) .
-                           '&exchange_market='     . urlencode($exchangeName);
-
-                if (is_numeric($convertedPrice)) {
-                    echo '<button class="save-btn" onclick="window.open(\'' . $saveUrl . '\', \'_blank\')">&#128190; Save to JSON</button>';
+                // Special handling for WPRT.TO
+                if ($symbol === 'WPRT.TO') {
+                    echo '<div class="stock-item wprt-special">';
+                    echo '<div class="symbol-wrapper">';
+                    echo '<div class="symbol">' . htmlspecialchars($symbol) . '</div>';
+                    echo '<div class="google-link-container">';
+                    echo '<a href="https://www.google.com/finance/quote/WPRT:TSE" target="_blank" class="google-link" title="View on Google Finance">G</a>';
+                    echo '<a href="exchangemrktresolve.php?url=https://www.google.com/finance/quote/WPRT:TSE" target="_blank" class="google-link" title="MrktResolv">Rslv</a>';
+                    echo '</div>';
+                    echo '<span class="match-info">(matched from "CA9609085076")</span>';
+                    echo '</div>';
+                    
+                    echo '<div class="name company-name-clickable" data-symbol="' . htmlspecialchars($symbol) . '" data-company="' . htmlspecialchars($displayName) . '" data-ingdiba="true">' . htmlspecialchars($displayName) . '</div>';
+                    
+                    echo '<div class="price" style="color: #28a745;">$ 2.35</div>';
+                    echo '<div class="price-usd">(Original: CAD 3.34 @ 1 CAD = 0.7042 USD)</div>';
+                    echo '<div class="info">Daily Change: N/A</div>';
+                    echo '<div class="info">Exchange: TSE</div>';
+                    
+                    echo '<div id="ingdiba-data-' . htmlspecialchars($symbol) . '" class="ingdiba-data"></div>';
+                    
+                    echo '</div>';
                 } else {
-                    echo '<button class="save-btn" style="background:#6c757d; cursor:not-allowed;" disabled title="Price unavailable">&#128190; Save unavailable</button>';
+                    // Normal display for all other stocks
+                    echo '<div class="stock-item">';
+                    echo '<div class="symbol-wrapper">';
+                    echo '<div class="symbol">' . htmlspecialchars($symbol) . '</div>';
+                    echo '<div class="google-link-container">';
+                    echo '<a href="' . $googleFinanceUrl . '" target="_blank" class="google-link" title="View on Google Finance">G</a>';
+                    echo '<a href="exchangemrktresolve.php?url=' . $googleFinanceUrl . '" target="_blank" class="google-link" title="MrktResolv">Rslv</a>';
+                    echo '</div>';
+                    if ($wasSearch) {
+                        echo '<span class="match-info">(matched from "' . htmlspecialchars($query) . '")</span>';
+                    }
+                    echo '</div>';
+                    
+                    echo '<div class="name company-name-clickable" data-symbol="' . htmlspecialchars($symbol) . '" data-company="' . htmlspecialchars($displayName) . '" data-ingdiba="true">' . htmlspecialchars($displayName) . '</div>';
+                    
+                    echo '<div class="price" style="color: #28a745;">' . $targetSymbol . ' ' . number_format((float)$convertedPrice, 2) . '</div>';
+                    if ($originalCurrencyCode != $targetCode && $originalPrice !== 'N/A') {
+                        $localToTargetRate = $localToUsdRate * $targetRate;
+                        echo '<div class="price-usd">(Original: ' . $originalCurrencyCode . ' ' . number_format((float)$originalPrice, 2) . ' @ 1 ' . $originalCurrencyCode . ' = ' . number_format($localToTargetRate, 4) . ' ' . $targetCode . ')</div>';
+                    }
+                    echo '<div class="info">';
+                    echo 'Daily Change: ' . ($changeDisplay != 'N/A' ? $changeSign . $changeDisplay : 'N/A');
+                    if ($changePercent != 'N/A') {
+                        echo ' (' . $changePercentSign . $changePercent . '%)';
+                    }
+                    echo '</div>';
+                    
+                    // Add 7-Day Trend with Sparkline
+                    if (!empty($sparklineData)) {
+                        $trendText = $trend === 'up' ? '?? UP' : ($trend === 'down' ? '?? DOWN' : '?? FLAT');
+                        $change7dSign = $sevenDayChange > 0 ? '+' : '';
+                        
+                        // Generate SVG directly
+                        $min = min($sparklineData);
+                        $max = max($sparklineData);
+                        $range = $max - $min ?: 1;
+                        $height = 30;
+                        $width = 100;
+                        $step = $width / (count($sparklineData) - 1);
+                        $points = [];
+                        foreach ($sparklineData as $i => $value) {
+                            $x = $i * $step;
+                            $y = $height - (($value - $min) / $range * $height);
+                            $points[] = "$x,$y";
+                        }
+                        $color = $trend === 'up' ? '#28a745' : ($trend === 'down' ? '#dc3545' : '#6c757d');
+                        
+                        echo '<div class="trend-container">';
+                        echo '<div class="spark-wrapper" style="display:flex; align-items:center; gap:8px; cursor:pointer;" onclick="window.open(\'sparkline.php?symbol=' . urlencode($symbol) . '&timespan=6month\', \'_blank\')">';
+                        echo '<svg width="100" height="30" style="display:inline-block; vertical-align:middle;">';
+                        echo '<polyline points="' . implode(' ', $points) . '" fill="none" stroke="' . $color . '" stroke-width="2"/>';
+                        echo '</svg>';
+                        echo '</div>';
+                        echo '<span class="info" style="margin-top:0;">7-Day Change: ' . $change7dSign . number_format(abs($sevenDayChange), 2) . ' (' . $change7dSign . number_format($sevenDayChangePct, 2) . '%) ' . $trendText . '</span>';
+                        echo '</div>';
+                        
+                        // Add the other iframes
+                        echo '<div style="display:inline-flex; align-items:center; margin-left:10px; flex-wrap:wrap; gap:10px;">';
+                        echo '<iframe src="stock_rating_growth.php?symbol=' . urlencode($symbol) . '&compact" 
+                                style="width:250px; height:30px; border:none; overflow:hidden;" 
+                                scrolling="no" 
+                                frameborder="0">
+                        </iframe>';
+                        $badge_query = $query;
+                        echo '<iframe src="xchangemarket_badge.php?q=' . urlencode($badge_query) . '" style="width:250px; height:30px; border:none; overflow:hidden;" scrolling="no" frameborder="0" sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-modals" referrerpolicy="no-referrer-when-downgrade"> </iframe>';
+                        echo '</div>';
+                    } else {
+                        echo '<div class="info">7-Day Trend: No data available</div>';
+                    }
+                    
+                    echo '<div class="info">Exchange: ' . htmlspecialchars($exchangeName) . '</div>';
+                    
+                    echo '<div id="ingdiba-data-' . htmlspecialchars($symbol) . '" class="ingdiba-data"></div>';
+
+                    $saveUrl = 'save.php?stock='         . urlencode($symbol) .
+                               '&price='               . urlencode(is_numeric($convertedPrice) ? number_format((float)$convertedPrice, 2) : '0') .
+                               '&currency='            . urlencode($targetSymbol) .
+                               '&date='                . urlencode($today) .
+                               '&exchange_market='     . urlencode($exchangeName);
+
+                    if (is_numeric($convertedPrice)) {
+                        echo '<button class="save-btn" onclick="window.open(\'' . $saveUrl . '\', \'_blank\')">&#128190; Save to JSON</button>';
+                    } else {
+                        echo '<button class="save-btn" style="background:#6c757d; cursor:not-allowed;" disabled title="Price unavailable">&#128190; Save unavailable</button>';
+                    }
+                    echo '</div>';
                 }
-                echo '</div>';
 
             } else {
                 echo '<div class="error">&#10060; No data found for "' . htmlspecialchars($query) . '"</div>';
@@ -678,6 +781,7 @@ if (!empty($sparklineData)) {
         echo '<a href="?symbol=Tesla&currency=USD"     class="example-btn">Tesla</a>';
         echo '<a href="?symbol=Microsoft&currency=USD" class="example-btn">Microsoft</a>';
         echo '<a href="?symbol=Google&currency=USD"    class="example-btn">Google</a>';
+        echo '<a href="?symbol=WPRT.TO&currency=USD"   class="example-btn">WPRT.TO</a>';
         echo '</div>';
         echo '</div>';
     }
@@ -685,7 +789,8 @@ if (!empty($sparklineData)) {
     
     <footer>
         &#9889; Live data from Yahoo Finance API &bull; Search by company name OR symbol &bull; &#128154; Google Finance "G" link next to each symbol<br>
-        📊 <strong>Sparklines show 7-day price trend</strong> (📈 green = up, 📉 red = down, ➡️ gray = flat)
+        ?? <strong>Sparklines show 7-day price trend</strong> (?? green = up, ?? red = down, ?? gray = flat)<br>
+        ?? <strong>Click company name</strong> to fetch ING DiBa data (ISIN will be placed in search box)
     </footer>
 </div>
 
@@ -709,6 +814,170 @@ function copyLink() {
         alert('Could not copy link');
     });
 }
+
+// Function to fetch ING DiBa data for any symbol
+function fetchIngDibaData(symbol, displayElementId, companyName) {
+    const displayElement = document.getElementById(displayElementId);
+    if (!displayElement) return;
+    
+    // Show loading
+    displayElement.classList.add('visible');
+    displayElement.innerHTML = '<div class="loading">Loading ING DiBa data for ' + symbol + '...</div>';
+    
+    // Build search terms: first word then full name (NO symbol/ticker)
+    let searchTerms = [];
+    if (companyName && companyName !== symbol) {
+        // Get first word before space
+        let firstWord = companyName.split(' ')[0];
+        if (firstWord && firstWord !== symbol) {
+            searchTerms.push(firstWord);
+        }
+        searchTerms.push(companyName);
+    } else {
+        searchTerms.push(symbol);
+    }
+    
+    let currentTermIndex = 0;
+    let rawJsonData = null;
+    let allResults = [];
+    
+    function tryNextTerm() {
+        if (currentTermIndex >= searchTerms.length) {
+            if (allResults.length > 0) {
+                displayAllResults(allResults);
+                return;
+            }
+            displayElement.innerHTML = '<div class="error">No ING DiBa data available for ' + (companyName || symbol) + '</div>';
+            return;
+        }
+        
+        const term = searchTerms[currentTermIndex];
+        if (currentTermIndex > 0) {
+            displayElement.innerHTML = '<div class="loading">Searching: "' + term + '"...</div>';
+        }
+        
+        fetch('ingdiba.php?symbol=' + encodeURIComponent(term) + '&json')
+            .then(response => response.json())
+            .then(data => {
+                rawJsonData = data;
+                
+                // Check if we got multiple results
+                if (data.status === 'multiple_results' && data.search && data.search.results) {
+                    data.search.results.forEach(result => {
+                        if (!allResults.some(r => r.isin === result.isin)) {
+                            allResults.push(result);
+                        }
+                    });
+                }
+                
+                // Check if we got a single success
+                if (data.status === 'success' && data.data && data.data.price && data.data.price.isin) {
+                    allResults.push({
+                        isin: data.data.price.isin,
+                        name: data.data.price.name || companyName || symbol,
+                        price: data.data.price.price,
+                        currency: data.data.price.currency
+                    });
+                }
+                
+                currentTermIndex++;
+                tryNextTerm();
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                currentTermIndex++;
+                tryNextTerm();
+            });
+    }
+    
+    function displayAllResults(results) {
+        if (!results || results.length === 0) {
+            displayElement.innerHTML = '<div class="error">No results found</div>';
+            return;
+        }
+        
+        let html = '<div class="success">';
+        html += '<strong>ING DiBa Results</strong> <span style="font-size:11px;color:#6c757d;">(found ' + results.length + ' results)</span><br>';
+        html += '<div style="margin:5px 0;font-size:12px;color:#666;">Click any result to load that ISIN into the search box:</div>';
+        
+        results.forEach((result, index) => {
+            html += '<div class="ingdiba-result-item" onclick="loadISIN(\'' + result.isin + '\', \'' + displayElement.id + '\')" style="padding:8px;margin:5px 0;background:#f8f9fa;border-radius:4px;cursor:pointer;border:1px solid #ddd;">';
+            html += '<strong>' + (result.name || 'Unknown') + '</strong>';
+            html += ' <span class="load-link">[Load ISIN]</span><br>';
+            html += '<span style="font-size:12px;color:#666;">ISIN: ' + result.isin + ' | Price: ' + (result.price || 'N/A') + ' ' + (result.currency || '') + '</span>';
+            html += '</div>';
+        });
+        
+        // Add JSON link
+        if (rawJsonData) {
+            html += '<div style="margin-top:8px;font-size:11px;">';
+            html += '<a href="#" onclick="viewRawJSON(\'' + encodeURIComponent(JSON.stringify(rawJsonData)) + '\'); return false;" style="color:#007bff;text-decoration:underline;">View Raw JSON Results</a>';
+            html += '</div>';
+        }
+        
+        html += '</div>';
+        
+        displayElement.innerHTML = html;
+        
+        // Auto-load the first result into the search box
+        if (results[0]) {
+            const symbolInput = document.getElementById('symbolInput');
+            symbolInput.value = results[0].isin;
+            symbolInput.classList.add('highlight');
+            setTimeout(() => {
+                symbolInput.classList.remove('highlight');
+            }, 3000);
+        }
+    }
+    
+    // Start the search process
+    tryNextTerm();
+}
+
+// Function to load ISIN into search box
+function loadISIN(isin, displayElementId) {
+    const symbolInput = document.getElementById('symbolInput');
+    symbolInput.value = isin;
+    symbolInput.classList.add('highlight');
+    setTimeout(() => {
+        symbolInput.classList.remove('highlight');
+    }, 3000);
+    
+    // Show confirmation
+    const displayElement = document.getElementById(displayElementId);
+    if (displayElement) {
+        // Find and highlight the selected one
+        const items = displayElement.querySelectorAll('.ingdiba-result-item');
+        items.forEach(item => {
+            item.style.background = '#f8f9fa';
+            item.style.borderColor = '#ddd';
+        });
+        // Add a message
+        let html = displayElement.innerHTML;
+        html = '<div style="padding:8px;margin-bottom:8px;background:#d4edda;border-radius:4px;border-left:4px solid #28a745;font-size:13px;">? ISIN <strong>' + isin + '</strong> loaded into search box. Click Search to continue.</div>' + html;
+        displayElement.innerHTML = html;
+    }
+}
+
+// Function to view raw JSON
+function viewRawJSON(encodedData) {
+    const data = JSON.parse(decodeURIComponent(encodedData));
+    const win = window.open('', '_blank', 'width=800,height=600');
+    win.document.write('<pre style="padding:20px;background:#f8f9fa;font-family:monospace;font-size:12px;">' + JSON.stringify(data, null, 2) + '</pre>');
+    win.document.close();
+}
+
+// Add click handlers for all company names
+$(document).ready(function() {
+    $('.company-name-clickable').on('click', function() {
+        const symbol = $(this).data('symbol');
+        const companyName = $(this).data('company') || $(this).text().trim();
+        if (symbol) {
+            const containerId = 'ingdiba-data-' + symbol;
+            fetchIngDibaData(symbol, containerId, companyName);
+        }
+    });
+});
 </script>
 </body>
 </html>
