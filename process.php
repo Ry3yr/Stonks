@@ -1,3 +1,6 @@
+
+
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -979,5 +982,66 @@ $(document).ready(function() {
     });
 });
 </script>
+
+   
+   
+<script>
+$(document).ready(function() {
+    var STOCKS_JSON_URL = 'stocks.json';
+    var DELIST_PHP_URL  = 'delistrisk.php';
+    var symbolEl = document.querySelector('.stock-item .symbol');
+    if (!symbolEl) return;
+    var symbol = symbolEl.textContent.trim();
+    if (!symbol) return;
+    var cleanSymbol = symbol.toUpperCase().trim().replace(/\.[A-Z]{2,}$/i, '');
+    var infoDiv = document.querySelector('.stock-item .info:last-of-type');
+    if (!infoDiv || !infoDiv.parentNode) return;
+    var statusDiv = document.createElement('div');
+    statusDiv.id = 'json-check-status';
+    statusDiv.style.cssText = 'display:inline-block;margin-left:10px;font-size:11px;padding:2px 8px;border-radius:4px;';
+    infoDiv.parentNode.insertBefore(statusDiv, infoDiv.nextSibling);
+    var wrapper = document.createElement('div');
+    wrapper.style.cssText = 'display:inline-block;vertical-align:top;margin-left:10px;';
+    var iframe = document.createElement('iframe');
+    iframe.src = DELIST_PHP_URL + '?stock=' + encodeURIComponent(cleanSymbol) + '&compact';
+    iframe.width = '120';
+    iframe.height = '40';
+    iframe.style.cssText = 'border:none;display:block;';
+    iframe.title = 'Delist risk: ' + cleanSymbol;
+    iframe.loading = 'lazy';
+    wrapper.appendChild(iframe);
+    statusDiv.parentNode.insertBefore(wrapper, statusDiv.nextSibling);
+    fetch(STOCKS_JSON_URL + '?_=' + Date.now())
+        .then(function(r) { return r.ok ? r.json() : Promise.reject('HTTP ' + r.status); })
+        .then(function(data) {
+            var stocks = Array.isArray(data) ? data : (data.stocks || []);
+            var found = stocks.find(function(s) { 
+                return s.stock && s.stock.toUpperCase() === cleanSymbol; 
+            });
+            if (found) {
+                statusDiv.textContent = 'IN JSON';
+                statusDiv.style.background = '#d4edda';
+                statusDiv.style.color = '#155724';
+                statusDiv.style.border = '1px solid #28a745';
+            } else {
+                statusDiv.textContent = 'NOT IN JSON';
+                statusDiv.style.background = '#f8d7da';
+                statusDiv.style.color = '#721c24';
+                statusDiv.style.border = '1px solid #dc3545';
+            }
+        })
+        .catch(function(err) {
+            statusDiv.textContent = 'JSON ERROR';
+            statusDiv.style.background = '#fff3cd';
+            statusDiv.style.color = '#856404';
+            statusDiv.style.border = '1px solid #ffc107';
+            console.error('stocks-check:', err);
+        });
+});
+</script>
+   
+   
+</body>
+</html>
 </body>
 </html>
