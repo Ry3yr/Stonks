@@ -24,7 +24,7 @@ $REVERSAL_MAX_RSI = 35;
 $REVERSAL_MIN_VOL = 2.0;
 $REVERSAL_MIN_BOUNCE = 1.05;
 
-$TICKER_BASE_URL = 'https://alceawis.de/other/extra/fetchdata/2026-05-13-Finance/2026-05-13-Stocks/process.php?symbol=';
+$TICKER_BASE_URL = 'process.php?symbol=';
 
 // ─── NASDAQ Cap Band Definitions ────────────────────────────────────────────
 
