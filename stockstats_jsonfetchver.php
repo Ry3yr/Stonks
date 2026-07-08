@@ -2,14 +2,58 @@
 /**
  * stock_performance.php
  *
- * Reads stocks.json, fetches current prices, calculates gains/losses,
- * outputs compact JSON and always appends to stockstats.json.
+ * Reads stocks.json, fetches current prices, converts to USD via Yahoo FX,
+ * calculates gains/losses in USD, outputs compact JSON and appends to stockstats.json.
+ * FORMAT: {"timestamp":"...","stocks":{"SYMBOL":usd_gain,...},"summary":{...}}
  */
 
 // Configuration
 $stocksFile = __DIR__ . '/stocks.json';
 $statsFile  = __DIR__ . '/stockstats.json';
 $yahooTimeout = 15;
+
+// --- FX CONVERSION (same logic as the portfolio HTML script) ---
+// Fetches e.g. "HKDUSD=X" or "EURUSD=X" from Yahoo and caches per-currency
+$GLOBALS['fxCache'] = [];
+
+function getFxRate($currency) {
+    $currency = strtoupper($currency);
+    if ($currency === 'USD') {
+        return 1.0;
+    }
+    if (isset($GLOBALS['fxCache'][$currency])) {
+        return $GLOBALS['fxCache'][$currency];
+    }
+
+    $url = "https://query1.finance.yahoo.com/v8/finance/chart/" . urlencode($currency) . "USD=X";
+    
+    $ch = curl_init();
+    curl_setopt_array($ch, [
+        CURLOPT_URL => $url,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_TIMEOUT => 15,
+        CURLOPT_SSL_VERIFYPEER => false,
+        CURLOPT_SSL_VERIFYHOST => false,
+        CURLOPT_USERAGENT => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+    ]);
+    
+    $response = curl_exec($ch);
+    curl_close($ch);
+    
+    if (!$response) {
+        return null;
+    }
+    
+    $data = json_decode($response, true);
+    
+    if (isset($data['chart']['result'][0]['meta']['regularMarketPrice'])) {
+        $GLOBALS['fxCache'][$currency] = (float)$data['chart']['result'][0]['meta']['regularMarketPrice'];
+        return $GLOBALS['fxCache'][$currency];
+    }
+    
+    return null;
+}
 
 // Check if stocks.json exists
 if (!file_exists($stocksFile)) {
@@ -23,9 +67,9 @@ if (!$stocksData || !is_array($stocksData)) {
 }
 
 /**
- * Fetch current price from Yahoo Finance
+ * Fetch current price AND currency from Yahoo Finance
  */
-function getCurrentPrice($symbol) {
+function getCurrentPriceWithCurrency($symbol) {
     $url = "https://query1.finance.yahoo.com/v8/finance/chart/" . urlencode($symbol);
 
     $ch = curl_init();
@@ -46,16 +90,23 @@ function getCurrentPrice($symbol) {
     if ($httpCode !== 200 || !$response) return null;
 
     $data = json_decode($response, true);
+    if (!isset($data['chart']['result'][0])) return null;
 
-    if (isset($data['chart']['result'][0]['meta']['regularMarketPrice'])) {
-        return (float)$data['chart']['result'][0]['meta']['regularMarketPrice'];
+    $meta = $data['chart']['result'][0]['meta'];
+    $price = null;
+
+    if (isset($meta['regularMarketPrice'])) {
+        $price = (float)$meta['regularMarketPrice'];
+    } elseif (isset($data['chart']['result'][0]['indicators']['quote'][0]['close'][0])) {
+        $price = (float)$data['chart']['result'][0]['indicators']['quote'][0]['close'][0];
     }
 
-    if (isset($data['chart']['result'][0]['indicators']['quote'][0]['close'][0])) {
-        return (float)$data['chart']['result'][0]['indicators']['quote'][0]['close'][0];
-    }
+    if ($price === null) return null;
 
-    return null;
+    return [
+        'price' => $price,
+        'currency' => $meta['currency'] ?? 'USD'
+    ];
 }
 
 // Filter ISIN-qualified stocks with >0 shares
@@ -71,7 +122,7 @@ if (empty($qualifiedStocks)) {
     exit;
 }
 
-// Process stocks
+// Process stocks — ALL values converted to USD
 $stocksGains = [];
 $totalGain = 0;
 $totalLoss = 0;
@@ -83,13 +134,27 @@ foreach ($qualifiedStocks as $stock) {
 
     if ($shares <= 0 || $buyPrice <= 0) continue;
 
-    $currentPrice = getCurrentPrice($symbol);
-    if ($currentPrice === null) continue;
+    $quote = getCurrentPriceWithCurrency($symbol);
+    if ($quote === null) continue;
 
+    $rawPrice = $quote['price'];
+    $listingCurrency = strtoupper($quote['currency'] ?? 'USD');
+
+    // --- Convert fetched price to USD if not already USD ---
+    $currentPrice = $rawPrice;
+    
+    if ($listingCurrency !== 'USD') {
+        $fxRate = getFxRate($listingCurrency);
+        if ($fxRate === null) continue; // Skip if FX fails
+        $currentPrice = round($rawPrice * $fxRate, 4);
+    }
+
+    // Calculate gain/loss in USD
     $gainPerShare = $currentPrice - $buyPrice;
     $totalGainLoss = $gainPerShare * $shares;
-
     $roundedValue = round($totalGainLoss, 2);
+
+    // FORMAT PRESERVED: flat number in USD
     $stocksGains[$symbol] = $roundedValue;
 
     if ($roundedValue >= 0) $totalGain += $roundedValue;
@@ -98,7 +163,7 @@ foreach ($qualifiedStocks as $stock) {
 
 $netResult = $totalGain + $totalLoss;
 
-// Build entry in same format as stockstats.php (with timestamp)
+// Build entry in EXACT same format as before
 $entry = [
     'timestamp' => date('Y-m-d H:i:s'),
     'stocks' => $stocksGains,
@@ -109,11 +174,11 @@ $entry = [
     ]
 ];
 
-// Output compact JSON to browser (keeping backward compatibility with previous output format)
+// Output compact JSON to browser (EXACT same format)
 header('Content-Type: application/json; charset=utf-8');
 echo json_encode($stocksGains + ['summary' => $entry['summary']], JSON_UNESCAPED_UNICODE);
 
-// ALWAYS append to stockstats.json (with timestamp, matching stockstats.php format)
+// ALWAYS append to stockstats.json (SAME format)
 $allData = [];
 if (file_exists($statsFile)) {
     $decoded = json_decode(file_get_contents($statsFile), true);
