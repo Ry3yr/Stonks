@@ -8,29 +8,55 @@
  * 4. Yahoo Trending — Trending symbols (query1.finance.yahoo.com)
  */
 
+// ─── Yahoo Proxy (CORS bypass) ──────────────────────────────────────────────
+if (isset($_GET['yahoo_proxy']) && $_GET['yahoo_proxy'] == '1') {
+    header('Content-Type: application/json');
+    $q = isset($_GET['q']) ? trim($_GET['q']) : '';
+    if (empty($q)) {
+        echo json_encode(['error' => 'Missing q parameter']);
+        exit;
+    }
+    $url = 'https://query1.finance.yahoo.com/v1/finance/search?q=' . urlencode($q) . '&quotesCount=1&newsCount=0';
+    $ch = curl_init($url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');
+    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($httpCode !== 200 || !$response) {
+        echo json_encode(['error' => 'Yahoo proxy failed', 'http_code' => $httpCode]);
+    } else {
+        echo $response;
+    }
+    exit;
+}
+
 // ─── Config ──────────────────────────────────────────────────────────────────
 
-$MIN_AVG_VOLUME = 10000;      // Reduced from 100,000 - more inclusive
+$MIN_AVG_VOLUME = 10000;
 $MIN_PRICE = 0.50;
-$MAX_PRICE = 1.00;           // CHANGED: Reduced from 50 to 20 - focus on cheaper stocks
-$MIN_PCT_CHANGE = 3.0;        // Reduced from 5.0 - catch more movers
+$MAX_PRICE = 1.00;
+$MIN_PCT_CHANGE = 3.0;
 
 $LOOKBACK_DAYS = 20;
 
 $BREAKOUT_THRESHOLD = 1.02;
-$VOLUME_SPIKE = 1.2;          // Reduced from 1.5
+$VOLUME_SPIKE = 1.2;
 $MAX_RSI_BREAKOUT = 80;
 
-$VOL_SURGE_MIN = 2.0;         // Reduced from 3.0
-$VOL_SURGE_PRICE_MIN = 1.02;  // Reduced from 1.03
+$VOL_SURGE_MIN = 2.0;
+$VOL_SURGE_PRICE_MIN = 1.02;
 
 $REVERSAL_MAX_RSI = 35;
-$REVERSAL_MIN_VOL = 1.5;      // Reduced from 2.0
+$REVERSAL_MIN_VOL = 1.5;
 $REVERSAL_MIN_BOUNCE = 1.05;
 
-// NEW: Momentum-focused thresholds
-$HIGH_MOMENTUM_THRESHOLD = 15;  // 15%+ in 5 days
-$MOM_GAP_THRESHOLD = 10;        // 10%+ in 3 days with low volume
+$HIGH_MOMENTUM_THRESHOLD = 15;
+$MOM_GAP_THRESHOLD = 10;
 
 $TICKER_BASE_URL = 'https://alceawis.de/other/extra/fetchdata/2026-05-13-Finance/2026-05-13-Stocks/process.php?symbol=';
 
@@ -89,12 +115,11 @@ function runStreamingScan() {
     $tvCandidates = fetchTradingViewVolatile();
     runSimpleSourceScan('TradingView', 'tv', $tvCandidates, $seenSymbols, $stats);
 
-    // ── Run 2: NASDAQ (ULTRA FILTERED!) ──
+    // ── Run 2: NASDAQ ──
     sendEvent('status', ['message' => 'Fetching NASDAQ screener data...', 'type' => 'info']);
 
     $allNasdaqStocks = fetchNasdaqScreener();
 
-    // ── AGGRESSIVE PRE-FILTERING USING NASDAQ DATA ──
     $filteredCandidates = [];
     $skipReasons = [
         'price_too_high' => 0,
@@ -113,7 +138,6 @@ function runStreamingScan() {
         if ($price > $MAX_PRICE) { $skipReasons['price_too_high']++; continue; }
         if ($price < $MIN_PRICE) { $skipReasons['price_too_low']++; continue; }
         if ($cap > 10_000_000_000) { $skipReasons['cap_too_big']++; continue; }
-        // Relaxed: only skip if change is extremely small
         if (abs($pctChange) < 1.0) { $skipReasons['pct_change_too_low']++; continue; }
         if ($price <= 0 || $cap <= 0) { $skipReasons['no_data']++; continue; }
 
@@ -161,14 +185,14 @@ function runStreamingScan() {
             $sig['marketCap'] = $cand['marketCap'];
             $sig['sector'] = $cand['sector'];
             $sig['band'] = $cand['band'];
-            $sig['companyName'] = $cand['name'] ?? $sym; // Store company name
+            $sig['companyName'] = $cand['name'] ?? $sym;
             $stats['nas_signals']++;
             $seenSymbols[$sym] = true;
 
             sendEvent('signal', array_merge($sig, ['stats' => $stats]));
         }
 
-        usleep(50000);  // Faster: 50ms instead of 100ms
+        usleep(50000);
     }
 
     sendEvent('status', [
@@ -195,7 +219,7 @@ function runStreamingScan() {
     ]);
 }
 
-// ─── Generic scan loop for "flat symbol list" sources ──────────────────────
+// ─── Generic scan loop ──────────────────────────────────────────────────────
 
 function runSimpleSourceScan(string $sourceLabel, string $statPrefix, array $candidates, array &$seenSymbols, array &$stats) {
     $totalKey = "{$statPrefix}_total";
@@ -232,14 +256,14 @@ function runSimpleSourceScan(string $sourceLabel, string $statPrefix, array $can
             $sig['marketCap'] = null;
             $sig['sector'] = null;
             $sig['band'] = null;
-            $sig['companyName'] = $sym; // Use symbol as fallback
+            $sig['companyName'] = $sym; // Will be enriched by JS if needed
             $stats[$signalsKey]++;
             $seenSymbols[$sym] = true;
 
             sendEvent('signal', array_merge($sig, ['stats' => $stats]));
         }
 
-        usleep(50000);  // Faster: 50ms
+        usleep(50000);
     }
 
     sendEvent('status', [
@@ -387,11 +411,6 @@ function fetchNasdaqGainers(): array {
         ?? $data['data']['table']['rows']
         ?? [];
 
-    if (empty($rows)) {
-        $topKeys = is_array($data['data'] ?? null) ? implode(',', array_keys($data['data'])) : 'no data key';
-        error_log("NASDAQ Gainers: no rows found. Top-level data keys: {$topKeys}");
-    }
-
     $symbols = [];
     foreach ($rows as $row) {
         if (!empty($row['symbol'])) $symbols[] = $row['symbol'];
@@ -497,15 +516,14 @@ function screen(array $h, string $sym): ?array {
     $vol = $today['volume'];
 
     if ($price < $MIN_PRICE) return null;
-    if ($price > $MAX_PRICE) return null;  // Auto-filter: skip stocks over $20
+    if ($price > $MAX_PRICE) return null;
 
     $past = array_slice($h, -($LOOKBACK_DAYS + 1), $LOOKBACK_DAYS);
     $high20 = max(array_column($past, 'high'));
     $low20 = min(array_column($past, 'low'));
     $avgVol = array_sum(array_column($past, 'volume')) / count($past);
 
-    // Relaxed volume check - only skip if extremely low
-    if ($avgVol < 5000) return null;  // Absolute minimum
+    if ($avgVol < 5000) return null;
 
     $closes = array_column($h, 'close');
     $rsi = calcRSI($closes);
@@ -513,7 +531,6 @@ function screen(array $h, string $sym): ?array {
     $threeAgo = $h[count($h) - 4]['close'] ?? $price;
     $mom3d = (($price - $threeAgo) / $threeAgo) * 100;
 
-    // ── NEW: HIGH MOMENTUM (5-day) ──
     if (count($h) >= 6) {
         $fiveDaysAgo = $h[count($h) - 6]['close'] ?? $price;
         $mom5d = (($price - $fiveDaysAgo) / $fiveDaysAgo) * 100;
@@ -534,7 +551,6 @@ function screen(array $h, string $sym): ?array {
         }
     }
 
-    // ── NEW: MOMENTUM GAP (big move, low volume) ──
     if ($mom3d >= $MOM_GAP_THRESHOLD && $vol < $avgVol * 0.5 && $rsi < 80) {
         return [
             'symbol' => $sym, 
@@ -550,7 +566,6 @@ function screen(array $h, string $sym): ?array {
         ];
     }
 
-    // ── Breakout ──
     if ($price >= $high20 * $BREAKOUT_THRESHOLD && $vol >= $avgVol * $VOLUME_SPIKE && $rsi <= $MAX_RSI_BREAKOUT) {
         return [
             'symbol' => $sym, 'strategy' => 'BREAKOUT',
@@ -562,7 +577,6 @@ function screen(array $h, string $sym): ?array {
         ];
     }
 
-    // ── Volume Surge ──
     $yesterday = $h[count($h) - 2] ?? $today;
     $priceChange = (($price - $yesterday['close']) / $yesterday['close']);
     if ($vol >= $avgVol * $VOL_SURGE_MIN && $priceChange >= 0.02 && $rsi < 75) {
@@ -576,7 +590,6 @@ function screen(array $h, string $sym): ?array {
         ];
     }
 
-    // ── Oversold Bounce ──
     if ($rsi <= $REVERSAL_MAX_RSI && $vol >= $avgVol * $REVERSAL_MIN_VOL && $price >= $low20 * $REVERSAL_MIN_BOUNCE) {
         return [
             'symbol' => $sym, 'strategy' => 'REVERSAL',
@@ -720,12 +733,60 @@ header('Content-Type: text/html; charset=utf-8');
         .scan-btn:hover { background: #2ea043; }
         .scan-btn:disabled { opacity: 0.5; cursor: not-allowed; }
         .scan-btn.scanning { background: #d29922; }
-        .status-bar { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; font-size: 13px; color: #8b949e; min-height: 44px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-        .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+        .status-bar { 
+            background: #161b22; 
+            border: 1px solid #30363d; 
+            border-radius: 8px; 
+            padding: 12px 16px; 
+            margin-bottom: 16px; 
+            font-size: 13px; 
+            color: #8b949e; 
+            min-height: 44px; 
+            display: flex; 
+            flex-direction: column;
+            gap: 8px;
+        }
+        .status-top {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
         .status-dot.idle { background: #8b949e; }
         .status-dot.scanning { background: #d29922; animation: pulse 1s infinite; }
         .status-dot.done { background: #3fb950; }
         .status-dot.error { background: #f85149; }
+        .status-message { flex: 1; }
+        .log-container {
+            max-height: 150px;
+            overflow-y: auto;
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 4px;
+            padding: 6px 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            line-height: 1.5;
+            color: #c9d1d9;
+            margin-top: 4px;
+            scroll-behavior: smooth;
+        }
+        .log-container::-webkit-scrollbar { width: 6px; }
+        .log-container::-webkit-scrollbar-track { background: #0d1117; }
+        .log-container::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
+        .log-entry {
+            border-bottom: 1px solid #21262d;
+            padding: 2px 0;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        .log-entry:last-child { border-bottom: none; }
+        .log-entry .timestamp { color: #484f58; margin-right: 8px; }
+        .log-entry .level-info { color: #58a6ff; }
+        .log-entry .level-debug { color: #8b949e; }
+        .log-entry .level-error { color: #f85149; }
+        .log-entry .level-success { color: #3fb950; }
         .signal-flash { animation: flashGreen 0.5s; }
         @keyframes flashGreen { 0% { background: rgba(63, 185, 80, 0.3); } 100% { background: transparent; } }
         .price-filter-info {
@@ -793,12 +854,34 @@ header('Content-Type: text/html; charset=utf-8');
         .isin-modal-close:hover {
             color: #f85149;
         }
+        .market-badge-wrapper {
+            cursor: pointer;
+            display: block;
+            margin-top: 4px;
+        }
+        .market-badge-wrapper:hover {
+            opacity: 0.8;
+        }
         .market-badge-iframe {
             width: 100%;
             height: 60px;
             border: none;
-            margin-top: 6px;
             display: block;
+            pointer-events: none;
+        }
+        .clear-log-btn {
+            background: #21262d;
+            border: 1px solid #30363d;
+            color: #8b949e;
+            padding: 2px 10px;
+            border-radius: 4px;
+            font-size: 11px;
+            cursor: pointer;
+            float: right;
+        }
+        .clear-log-btn:hover {
+            background: #30363d;
+            color: #c9d1d9;
         }
     </style>
 </head>
@@ -818,8 +901,12 @@ header('Content-Type: text/html; charset=utf-8');
     </div>
 
     <div class="status-bar" id="statusBar">
-        <span class="status-dot idle" id="statusDot"></span>
-        <span id="statusMessage">Ready to scan</span>
+        <div class="status-top">
+            <span class="status-dot idle" id="statusDot"></span>
+            <span class="status-message" id="statusMessage">Ready to scan</span>
+            <button class="clear-log-btn" onclick="clearLog()">Clear Log</button>
+        </div>
+        <div class="log-container" id="logContainer"></div>
     </div>
 
     <div class="stats">
@@ -877,6 +964,36 @@ header('Content-Type: text/html; charset=utf-8');
     </div>
 
     <script>
+    // ─── Global debug/logging ──────────────────────────────────────────────
+    const DEBUG = true;
+
+    function log(level, ...args) {
+        const container = document.getElementById('logContainer');
+        if (!container) return;
+        const timestamp = new Date().toLocaleTimeString();
+        const message = args.join(' ');
+        const entry = document.createElement('div');
+        entry.className = 'log-entry';
+        const levelClass = 'level-' + (level || 'info');
+        entry.innerHTML = `<span class="timestamp">[${timestamp}]</span><span class="${levelClass}">${level.toUpperCase()}:</span> ${escapeHtml(message)}`;
+        container.appendChild(entry);
+        container.scrollTop = container.scrollHeight;
+        console.log(`[${timestamp}]`, ...args);
+    }
+
+    function escapeHtml(str) {
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+    }
+
+    function clearLog() {
+        const container = document.getElementById('logContainer');
+        if (container) container.innerHTML = '';
+    }
+
+    // ─── Status bar update ──────────────────────────────────────────────────
+
     let currentFilter = 'all';
     let allSignals = [];
     let eventSource = null;
@@ -902,118 +1019,217 @@ header('Content-Type: text/html; charset=utf-8');
         'YahooTrending': 'ytrend',
     };
 
-    // ─── ISIN Lookup Function ──────────────────────────────────────────────
+    // ─── Fetch company name using local proxy ──────────────────────────────
+    async function fetchCompanyName(symbol) {
+        log('debug', 'fetchCompanyName() called for:', symbol);
+        try {
+            const url = '?yahoo_proxy=1&q=' + encodeURIComponent(symbol);
+            log('debug', 'Fetching from local proxy:', url);
+            const response = await fetch(url);
+            if (!response.ok) {
+                log('error', 'Proxy fetch failed with status:', response.status);
+                return null;
+            }
+            const data = await response.json();
+            log('debug', 'Proxy response:', JSON.stringify(data).substring(0, 300) + '...');
+            if (data && data.quotes && data.quotes.length > 0) {
+                const name = data.quotes[0].longname || data.quotes[0].shortname || null;
+                log('info', 'Found company name via proxy:', name);
+                return name;
+            }
+            log('debug', 'No company name found in proxy response');
+            return null;
+        } catch (e) {
+            log('error', 'Proxy fetch error:', e);
+            return null;
+        }
+    }
 
+    // ─── ISIN Lookup Function ──────────────────────────────────────────────
     async function lookupISIN(symbol, companyName, rowElement) {
+        log('info', '======= lookupISIN() called =======');
+        log('info', 'symbol:', symbol);
+        log('info', 'companyName provided:', companyName || '(null)');
+
         const isinCell = rowElement.querySelector('td:last-child');
         const link = isinCell.querySelector('.isin-link');
-        
-        // Show loading state
+        if (!link) {
+            log('error', 'ERROR: link element not found!');
+            return;
+        }
+
         link.textContent = '⏳ Searching...';
         link.className = 'isin-link loading';
         
-        try {
-            // Build search terms: first word, then full name, then symbol
-            let searchTerms = [];
-            if (companyName && companyName !== symbol) {
-                let firstWord = companyName.split(' ')[0];
-                if (firstWord && firstWord !== symbol) {
-                    searchTerms.push(firstWord);
-                }
-                searchTerms.push(companyName);
-            }
-            searchTerms.push(symbol);
-            
-            let allResults = [];
-            let foundIsin = null;
-            
-            // Try each search term
-            for (let term of searchTerms) {
-                const response = await fetch('ingdiba.php?symbol=' + encodeURIComponent(term) + '&json');
-                const data = await response.json();
-                
-                // Check for multiple results
-                if (data.status === 'multiple_results' && data.search && data.search.results) {
-                    data.search.results.forEach(result => {
-                        if (!allResults.some(r => r.isin === result.isin)) {
-                            allResults.push(result);
-                        }
-                    });
-                }
-                
-                // Check for single success
-                if (data.status === 'success' && data.data && data.data.price && data.data.price.isin) {
-                    const isin = data.data.price.isin;
-                    if (!allResults.some(r => r.isin === isin)) {
-                        allResults.push({
-                            isin: isin,
-                            name: data.data.price.name || companyName || symbol,
-                            price: data.data.price.price,
-                            currency: data.data.price.currency
-                        });
-                    }
-                }
-                
-                // If we found exactly one result, stop searching
-                if (allResults.length === 1) {
-                    foundIsin = allResults[0].isin;
-                    break;
-                }
-            }
-            
-            // Display results
-            if (foundIsin) {
-                // Single result found
-                link.textContent = foundIsin;
-                link.className = 'isin-link';
-                link.style.color = '#3fb950';
-                link.style.borderColor = '#3fb950';
-                isinCache[symbol] = foundIsin;
-                
-                // Inject visual market connection badge below the link
-                appendMarketIframe(isinCell, foundIsin);
-                
-                // Update the signal data
-                allSignals.forEach(sig => {
-                    if (sig.symbol === symbol) {
-                        sig.isin = foundIsin;
-                    }
-                });
-            } else if (allResults.length > 1) {
-                // Multiple results - show selection modal
-                link.textContent = 'Multiple (' + allResults.length + ') ▼';
-                link.className = 'isin-link';
-                link.style.color = '#d29922';
-                link.style.borderColor = '#d29922';
-                
-                isinCache[symbol] = allResults;
-                
-                // Store for modal
-                link.onclick = function(e) {
-                    e.stopPropagation();
-                    openISINModal(symbol, allResults);
-                };
+        // --- Step 1: Get a valid company name ---
+        let effectiveName = companyName;
+        if (!effectiveName || effectiveName === symbol) {
+            log('info', 'Company name missing or same as symbol, fetching from Yahoo via proxy...');
+            const fetched = await fetchCompanyName(symbol);
+            if (fetched) {
+                effectiveName = fetched;
+                log('info', 'Fetched effectiveName:', effectiveName);
             } else {
-                // No results found
+                log('warn', 'Could not fetch company name, will fallback to symbol');
+                effectiveName = symbol;
+            }
+        } else {
+            log('info', 'Using provided company name:', effectiveName);
+        }
+        
+        // --- Step 2: Build search terms (same as process.php) ---
+        let searchTerms = [];
+        if (effectiveName && effectiveName !== symbol) {
+            // First word of the company name
+            let firstWord = effectiveName.split(' ')[0];
+            if (firstWord && firstWord !== symbol) {
+                searchTerms.push(firstWord);
+                log('debug', 'Added first word:', firstWord);
+            }
+            // Full company name
+            searchTerms.push(effectiveName);
+            log('debug', 'Added full name:', effectiveName);
+        }
+        // Always fallback to symbol as last resort
+        searchTerms.push(symbol);
+        log('debug', 'Added symbol fallback:', symbol);
+        
+        // Remove duplicates
+        searchTerms = [...new Set(searchTerms)];
+        log('info', 'Final search terms:', searchTerms.join(', '));
+        
+        let allResults = [];
+        let rawJsonData = null;
+        let currentTermIndex = 0;
+        
+        // --- Step 3: Recursive search ────────────────────────────────────
+        function tryNextTerm() {
+            log('debug', 'tryNextTerm() index:', currentTermIndex, 'of', searchTerms.length);
+            if (currentTermIndex >= searchTerms.length) {
+                log('debug', 'All terms tried, results:', allResults.length);
+                if (allResults.length > 0) {
+                    displayAllResults(allResults);
+                    return;
+                }
+                log('error', 'No results found');
                 link.textContent = '❌ Not found';
                 link.className = 'isin-link';
                 link.style.color = '#f85149';
                 link.style.borderColor = '#f85149';
                 isinCache[symbol] = null;
+                return;
             }
             
-        } catch (error) {
-            console.error('ISIN lookup error:', error);
-            link.textContent = '❌ Error';
-            link.className = 'isin-link';
-            link.style.color = '#f85149';
-            link.style.borderColor = '#f85149';
+            const term = searchTerms[currentTermIndex];
+            log('info', 'Searching term: "' + term + '"');
+            if (currentTermIndex > 0) {
+                link.textContent = '⏳ Searching: "' + term + '"...';
+            }
+            
+            const url = 'ingdiba.php?symbol=' + encodeURIComponent(term) + '&json';
+            log('debug', 'Fetching URL:', url);
+            
+            fetch(url)
+                .then(response => {
+                    log('debug', 'Response status:', response.status);
+                    return response.json();
+                })
+                .then(data => {
+                    log('debug', 'ING DiBa response for term "' + term + '":', JSON.stringify(data).substring(0, 300) + '...');
+                    rawJsonData = data;
+                    
+                    if (data.status === 'multiple_results' && data.search && data.search.results) {
+                        const count = data.search.results.length;
+                        log('info', 'Multiple results found, count:', count);
+                        data.search.results.forEach(result => {
+                            if (result.isin && !allResults.some(r => r.isin === result.isin)) {
+                                allResults.push({
+                                    isin: result.isin,
+                                    name: result.name || result.longName || effectiveName || symbol,
+                                    price: result.price || result.regularMarketPrice || result.close,
+                                    currency: result.currency || 'USD'
+                                });
+                                log('debug', 'Added result:', result.isin, result.name);
+                            }
+                        });
+                    }
+                    
+                    if (data.status === 'success' && data.data && data.data.price && data.data.price.isin) {
+                        const isin = data.data.price.isin;
+                        log('info', 'Single success result, ISIN:', isin);
+                        if (!allResults.some(r => r.isin === isin)) {
+                            allResults.push({
+                                isin: isin,
+                                name: data.data.price.name || effectiveName || symbol,
+                                price: data.data.price.price || data.data.price.regularMarketPrice || data.data.price.close,
+                                currency: data.data.price.currency || 'USD'
+                            });
+                            log('debug', 'Added success result:', isin);
+                        }
+                    }
+                    
+                    currentTermIndex++;
+                    tryNextTerm();
+                })
+                .catch(error => {
+                    log('error', 'Fetch error for term "' + term + '":', error);
+                    currentTermIndex++;
+                    tryNextTerm();
+                });
         }
+        
+        function displayAllResults(results) {
+            log('info', 'displayAllResults() called with', results.length, 'results');
+            if (!results || results.length === 0) {
+                log('error', 'No results to display');
+                link.textContent = '❌ Not found';
+                link.className = 'isin-link';
+                link.style.color = '#f85149';
+                link.style.borderColor = '#f85149';
+                isinCache[symbol] = null;
+                return;
+            }
+            
+            if (results.length === 1) {
+                const foundIsin = results[0].isin;
+                log('success', 'Single result found:', foundIsin);
+                link.textContent = foundIsin;
+                link.className = 'isin-link';
+                link.style.color = '#3fb950';
+                link.style.borderColor = '#3fb950';
+                isinCache[symbol] = foundIsin;
+                appendMarketIframe(isinCell, foundIsin);
+                allSignals.forEach(sig => {
+                    if (sig.symbol === symbol) {
+                        sig.isin = foundIsin;
+                    }
+                });
+                return;
+            }
+            
+            // Multiple results
+            log('info', 'Multiple results found, count:', results.length);
+            link.textContent = 'Multiple (' + results.length + ') ▼';
+            link.className = 'isin-link';
+            link.style.color = '#d29922';
+            link.style.borderColor = '#d29922';
+            isinCache[symbol] = results;
+            link.onclick = function(e) {
+                e.stopPropagation();
+                log('info', 'Opening modal for multiple results');
+                openISINModal(symbol, results);
+            };
+        }
+        
+        // Start the search
+        log('info', 'Starting recursive search...');
+        tryNextTerm();
     }
 
     // ─── ISIN Modal Functions ──────────────────────────────────────────────
 
     function openISINModal(symbol, isinData) {
+        log('info', 'openISINModal() called for', symbol);
         const modal = document.getElementById('isinModal');
         const symbolSpan = document.getElementById('isinModalSymbol');
         const resultsDiv = document.getElementById('isinModalResults');
@@ -1046,10 +1262,9 @@ header('Content-Type: text/html; charset=utf-8');
     }
 
     function selectISIN(symbol, isin) {
-        // Update cache
+        log('info', 'selectISIN() called for', symbol, '->', isin);
         isinCache[symbol] = isin;
         
-        // Update all rows for this symbol
         const rows = document.querySelectorAll(`#signalBody tr[data-symbol="${symbol}"]`);
         rows.forEach(row => {
             const isinCell = row.querySelector('td:last-child');
@@ -1059,14 +1274,11 @@ header('Content-Type: text/html; charset=utf-8');
                 link.className = 'isin-link';
                 link.style.color = '#3fb950';
                 link.style.borderColor = '#3fb950';
-                link.onclick = null; // Remove click handler
-                
-                // Inject visual market connection badge below selection box
+                link.onclick = null;
                 appendMarketIframe(isinCell, isin);
             }
         });
         
-        // Update the signal data
         allSignals.forEach(sig => {
             if (sig.symbol === symbol) {
                 sig.isin = isin;
@@ -1074,23 +1286,35 @@ header('Content-Type: text/html; charset=utf-8');
         });
     }
 
-    // ─── Embed market iframe badge inside cell container ───────────────────
+    // ─── Embed market iframe badge (clickable) ──────────────────────────────
 
     function appendMarketIframe(containerElement, isin) {
-        // Clean alternative badge if already generated
-        const existingIframe = containerElement.querySelector('.market-badge-iframe');
-        if (existingIframe) {
-            existingIframe.remove();
+        // Remove existing wrapper if any
+        const existingWrapper = containerElement.querySelector('.market-badge-wrapper');
+        if (existingWrapper) {
+            existingWrapper.remove();
         }
-        
+
+        const wrapper = document.createElement('div');
+        wrapper.className = 'market-badge-wrapper';
+        wrapper.style.cssText = 'cursor:pointer; display:block; margin-top:4px;';
+        wrapper.title = 'Click to check on xchangemarketcheck_gettex';
+        wrapper.onclick = function(e) {
+            window.open('xchangemarketcheck_gettex.php?q=' + encodeURIComponent(isin), '_blank');
+            e.stopPropagation();
+        };
+
         const iframe = document.createElement('iframe');
         iframe.className = 'market-badge-iframe';
-        iframe.src = `xchangemarket_badge.php?q=${encodeURIComponent(isin)}`;
-        
-        containerElement.appendChild(iframe);
+        iframe.src = 'xchangemarket_badge.php?q=' + encodeURIComponent(isin);
+        iframe.style.cssText = 'width:100%; height:60px; border:none; display:block; pointer-events:none;';
+        iframe.loading = 'lazy';
+
+        wrapper.appendChild(iframe);
+        containerElement.appendChild(wrapper);
     }
 
-    // ─── Start Scan with EventSource ──────────────────────────────────────
+    // ─── Start Scan ──────────────────────────────────────────────────────────
 
     function startScan() {
         const btn = document.getElementById('scanBtn');
@@ -1104,6 +1328,7 @@ header('Content-Type: text/html; charset=utf-8');
         document.getElementById('totalCount').className = 'stat-value loading';
 
         setStatus('scanning', 'Initializing scan...');
+        log('info', '=== Scan started ===');
 
         if (eventSource) {
             eventSource.close();
@@ -1115,6 +1340,7 @@ header('Content-Type: text/html; charset=utf-8');
         eventSource.addEventListener('status', function(e) {
             const data = JSON.parse(e.data);
             setStatus('scanning', data.message);
+            log('info', 'STATUS:', data.message);
         });
 
         eventSource.addEventListener('progress', function(e) {
@@ -1142,6 +1368,7 @@ header('Content-Type: text/html; charset=utf-8');
             if (skipped > 0) msg += ` (kept ${keptPct}% of original)`;
             if (data.signals) msg += `, ${data.signals} signals`;
             setStatus('scanning', msg);
+            log('debug', 'PROGRESS:', msg);
         });
 
         eventSource.addEventListener('signal', function(e) {
@@ -1152,10 +1379,7 @@ header('Content-Type: text/html; charset=utf-8');
                 updateStats();
             }
 
-            // Add to array
             allSignals.push(sig);
-            
-            // Render with sorting
             renderAllSignals();
 
             document.getElementById('totalCount').textContent = allSignals.length;
@@ -1163,11 +1387,14 @@ header('Content-Type: text/html; charset=utf-8');
 
             const container = document.getElementById('resultsContainer');
             container.scrollTop = container.scrollHeight;
+            
+            log('info', 'SIGNAL:', sig.symbol, sig.strategy, sig.price);
         });
 
         eventSource.addEventListener('done', function(e) {
             const data = JSON.parse(e.data);
             setStatus('done', data.message);
+            log('success', '=== Scan complete ===', data.message);
 
             btn.disabled = false;
             btn.textContent = '🔄 Scan Again';
@@ -1187,13 +1414,13 @@ header('Content-Type: text/html; charset=utf-8');
         });
 
         eventSource.addEventListener('error', function(e) {
-            console.log('EventSource error:', e);
-
+            log('error', 'EventSource error:', e);
             if (eventSource && eventSource.readyState === EventSource.CLOSED) {
                 btn.disabled = false;
                 btn.textContent = '🔄 Scan Again';
                 btn.className = 'scan-btn';
                 setStatus('error', 'Connection closed unexpectedly');
+                log('error', 'Connection closed unexpectedly');
             }
         });
 
@@ -1201,10 +1428,11 @@ header('Content-Type: text/html; charset=utf-8');
             btn.disabled = false;
             btn.textContent = '🔄 Scan Again';
             btn.className = 'scan-btn';
+            log('info', 'EventSource closed');
         });
     }
 
-    // ─── Sort Table Function ──────────────────────────────────────────────
+    // ─── Sort Table ──────────────────────────────────────────────────────────
 
     function sortTable(column) {
         if (sortColumn === column) {
@@ -1225,7 +1453,7 @@ header('Content-Type: text/html; charset=utf-8');
         renderAllSignals();
     }
 
-    // ─── Render All Signals (sorted) ─────────────────────────────────────
+    // ─── Render All Signals ──────────────────────────────────────────────────
 
     function renderAllSignals() {
         const tbody = document.getElementById('signalBody');
@@ -1259,7 +1487,7 @@ header('Content-Type: text/html; charset=utf-8');
         });
     }
 
-    // ─── Create a single signal row ──────────────────────────────────────
+    // ─── Create a single signal row ──────────────────────────────────────────
 
     function createSignalRow(sig) {
         const rsiClass = sig.rsi > 70 ? 'rsi-hot' : (sig.rsi > 50 ? 'rsi-warn' : 'rsi-ok');
@@ -1286,16 +1514,27 @@ header('Content-Type: text/html; charset=utf-8');
         const sourceLabel = sourceLabelMap[sig.source] || sig.source;
         const bandClass = sig.band ? 'band-' + sig.band.toLowerCase() : '';
 
-        // ISIN cell with lookup link
         let isinHtml = '';
         if (sig.isin) {
-            // Already have ISIN from cache
-            isinHtml = `<span class="isin-link" style="color:#3fb950;border-color:#3fb950;">${sig.isin}</span>
-                        <iframe class="market-badge-iframe" src="xchangemarket_badge.php?q=${encodeURIComponent(sig.isin)}"></iframe>`;
+            // ISIN already known – show clickable ISIN and clickable badge wrapper
+            const escapedIsin = sig.isin;
+            isinHtml = `
+                <span class="isin-link" style="color:#3fb950;border-color:#3fb950;">${escapedIsin}</span>
+                <div class="market-badge-wrapper" style="cursor:pointer; display:block; margin-top:4px;" 
+                     title="Click to check on xchangemarketcheck_gettex"
+                     onclick="window.open('xchangemarketcheck_gettex.php?q=' + encodeURIComponent('${escapedIsin}'), '_blank')">
+                    <iframe class="market-badge-iframe" 
+                            src="xchangemarket_badge.php?q=${encodeURIComponent(escapedIsin)}" 
+                            style="width:100%;height:60px;border:none;display:block;pointer-events:none;" 
+                            loading="lazy">
+                    </iframe>
+                </div>
+            `;
         } else {
-            // Show lookup link
+            // No ISIN yet – show lookup link
             const companyName = sig.companyName || sig.symbol;
-            isinHtml = `<span class="isin-link" onclick="lookupISIN('${sig.symbol}', '${companyName.replace(/'/g, "\\'")}', this.closest('tr'))">🔍 Lookup ISIN</span>`;
+            const escapedCompany = companyName.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+            isinHtml = `<span class="isin-link" onclick="lookupISIN('${sig.symbol}', '${escapedCompany}', this.closest('tr'))">🔍 Lookup ISIN</span>`;
         }
 
         const display = (currentFilter === 'all' || sig.source === currentFilter) ? '' : 'style="display:none;"';
@@ -1340,7 +1579,7 @@ header('Content-Type: text/html; charset=utf-8');
         return tr;
     }
 
-    // ─── Update Stats ──────────────────────────────────────────────────────
+    // ─── Update Stats ──────────────────────────────────────────────────────────
 
     function updateStats() {
         document.getElementById('tvCount').textContent = stats.tv_signals || 0;
@@ -1366,7 +1605,7 @@ header('Content-Type: text/html; charset=utf-8');
         document.getElementById('progressCount').textContent = progress + '%';
     }
 
-    // ─── Status Bar ────────────────────────────────────────────────────────
+    // ─── Status Bar ──────────────────────────────────────────────────────────
 
     function setStatus(type, message) {
         const dot = document.getElementById('statusDot');
@@ -1376,7 +1615,7 @@ header('Content-Type: text/html; charset=utf-8');
         msg.textContent = message;
     }
 
-    // ─── Filtering ──────────────────────────────────────────────────────────
+    // ─── Filtering ────────────────────────────────────────────────────────────
 
     function filterSource(source) {
         currentFilter = source;
@@ -1395,19 +1634,14 @@ header('Content-Type: text/html; charset=utf-8');
         });
     }
 
-    // ─── Helpers ────────────────────────────────────────────────────────────
-
-    function escapeHtml(str) {
-        const div = document.createElement('div');
-        div.textContent = str;
-        return div.innerHTML;
-    }
+    // ─── Helpers ──────────────────────────────────────────────────────────────
 
     function formatVol(v) {
         return v >= 1000000 ? (v/1000000).toFixed(1) + 'M' : (v/1000).toFixed(1) + 'K';
     }
 
-    // ─── Initialize with default sort on load ──────────────────────────────
+    // ─── Initialize ────────────────────────────────────────────────────────────
+
     document.addEventListener('DOMContentLoaded', function() {
         const defaultTh = document.querySelector('th[data-col="trigger_pct"]');
         if (defaultTh) {
@@ -1417,13 +1651,14 @@ header('Content-Type: text/html; charset=utf-8');
         sortDirection = 'desc';
         sortType = 'number';
         
-        // Close modal on click outside
         window.onclick = function(event) {
             const modal = document.getElementById('isinModal');
             if (event.target === modal) {
                 closeISINModal();
             }
         };
+
+        log('info', 'Page loaded, ISIN lookup ready (proxy active).');
     });
     </script>
 
