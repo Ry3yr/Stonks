@@ -35,11 +35,64 @@ if (isset($_GET['yahoo_proxy']) && $_GET['yahoo_proxy'] == '1') {
     exit;
 }
 
+// ─── Get JSON endpoint ──────────────────────────────────────────────────────
+if (isset($_GET['get_json']) && $_GET['get_json'] == '1') {
+    header('Content-Type: application/json');
+    $jsonFile = __DIR__ . '/stockscreener.json';
+    if (file_exists($jsonFile)) {
+        echo file_get_contents($jsonFile);
+    } else {
+        echo '[]';
+    }
+    exit;
+}
+
+// ─── Save to JSON endpoint ──────────────────────────────────────────────────
+if (isset($_POST['save_json']) && $_POST['save_json'] === '1') {
+    header('Content-Type: application/json');
+    $data = isset($_POST['data']) ? json_decode($_POST['data'], true) : null;
+    if (!$data || !is_array($data)) {
+        echo json_encode(['error' => 'Invalid data']);
+        exit;
+    }
+
+    $jsonFile = __DIR__ . '/stockscreener.json';
+    $existing = [];
+    if (file_exists($jsonFile)) {
+        $existing = json_decode(file_get_contents($jsonFile), true);
+        if (!is_array($existing)) $existing = [];
+    }
+
+    // Build a lookup of symbols already present, then only append new ones
+    $existingSymbols = [];
+    foreach ($existing as $e) {
+        if (!empty($e['symbol'])) {
+            $existingSymbols[$e['symbol']] = true;
+        }
+    }
+
+    $added = 0;
+    foreach ($data as $entry) {
+        if (empty($entry['symbol'])) continue;
+        if (isset($existingSymbols[$entry['symbol']])) continue; // skip, already present
+        $existing[] = $entry;
+        $existingSymbols[$entry['symbol']] = true;
+        $added++;
+    }
+
+    if (file_put_contents($jsonFile, json_encode($existing, JSON_PRETTY_PRINT))) {
+        echo json_encode(['success' => true, 'count' => count($existing), 'added' => $added]);
+    } else {
+        echo json_encode(['error' => 'Failed to write file']);
+    }
+    exit;
+}
+
 // ─── Config ──────────────────────────────────────────────────────────────────
 
-$MIN_AVG_VOLUME = 10000;
+$MIN_AVG_VOLUME = 70000;
 $MIN_PRICE = 0.50;
-$MAX_PRICE = 1.00;
+$MAX_PRICE = 0.80;
 $MIN_PCT_CHANGE = 3.0;
 
 $LOOKBACK_DAYS = 20;
@@ -733,6 +786,9 @@ header('Content-Type: text/html; charset=utf-8');
         .scan-btn:hover { background: #2ea043; }
         .scan-btn:disabled { opacity: 0.5; cursor: not-allowed; }
         .scan-btn.scanning { background: #d29922; }
+        .save-btn { background: #1f6feb; color: #fff; border: none; padding: 8px 20px; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 14px; margin-left: 8px; }
+        .save-btn:hover { background: #388bfd; }
+        .save-btn:disabled { opacity: 0.5; cursor: not-allowed; }
         .status-bar { 
             background: #161b22; 
             border: 1px solid #30363d; 
@@ -893,6 +949,7 @@ header('Content-Type: text/html; charset=utf-8');
         </div>
         <div>
             <button class="scan-btn" id="scanBtn" onclick="startScan()">🔍 Scan Now</button>
+            <button class="save-btn" id="saveBtn" onclick="saveToJSON()">💾 Save to JSON</button>
         </div>
     </div>
 
@@ -1314,6 +1371,211 @@ header('Content-Type: text/html; charset=utf-8');
         containerElement.appendChild(wrapper);
     }
 
+    // ─── Render stored gettex status as plain text (no iframe) ──────────────
+    // Used when restoring from stockscreener.json - we already know the status,
+    // so there's no need to load an iframe per row just to re-fetch it.
+    function appendGettexStatusText(containerElement, isin, statusText) {
+        const existingWrapper = containerElement.querySelector('.market-badge-wrapper');
+        if (existingWrapper) {
+            existingWrapper.remove();
+        }
+
+        const wrapper = document.createElement('div');
+        wrapper.className = 'market-badge-wrapper';
+        wrapper.style.cssText = 'cursor:pointer; display:block; margin-top:4px; font-size:11px; padding:2px 6px; border-radius:4px; background:#21262d; color:#8b949e; border:1px solid #30363d;';
+        wrapper.title = 'Click to check on xchangemarketcheck_gettex';
+        wrapper.textContent = statusText && statusText.trim() ? statusText.trim() : '—';
+        wrapper.onclick = function(e) {
+            window.open('xchangemarketcheck_gettex.php?q=' + encodeURIComponent(isin), '_blank');
+            e.stopPropagation();
+        };
+
+        containerElement.appendChild(wrapper);
+    }
+
+    // ─── Apply stored data from JSON (auto-restore) ──────────────────────
+
+    function applyStoredData() {
+        log('info', '🔄 Applying stored data from stockscreener.json...');
+        fetch('?get_json=1')
+            .then(res => res.json())
+            .then(data => {
+                if (!data || !Array.isArray(data) || data.length === 0) {
+                    log('debug', 'No stored data found or empty JSON');
+                    return;
+                }
+                // Build map symbol -> {isin, status}
+                const map = {};
+                data.forEach(item => {
+                    if (item.symbol && item.isin) {
+                        map[item.symbol] = {
+                            isin: item.isin,
+                            status: item.gettex_status || ''
+                        };
+                    }
+                });
+
+                const rows = document.querySelectorAll('#signalBody tr');
+                let updatedCount = 0;
+                rows.forEach(row => {
+                    const symbol = row.dataset.symbol;
+                    if (!symbol) return;
+                    const entry = map[symbol];
+                    if (!entry) return;
+
+                    const isinCell = row.querySelector('td:last-child');
+                    if (!isinCell) return;
+
+                    // Check if already has an ISIN (manual lookup already done)
+                    const existingLink = isinCell.querySelector('.isin-link');
+                    if (existingLink) {
+                        const text = existingLink.textContent.trim();
+                        if (/^[A-Z]{2}[A-Z0-9]{10}$/.test(text)) {
+                            // Already has ISIN, skip to preserve manual selection
+                            return;
+                        }
+                        // It's a lookup link – we'll replace it
+                    }
+
+                    // Remove all children (lookup link, any iframes)
+                    isinCell.innerHTML = '';
+
+                    // Add ISIN link (green)
+                    const isinSpan = document.createElement('span');
+                    isinSpan.className = 'isin-link';
+                    isinSpan.style.color = '#3fb950';
+                    isinSpan.style.borderColor = '#3fb950';
+                    isinSpan.textContent = entry.isin;
+                    isinCell.appendChild(isinSpan);
+
+                    // We already know the status from JSON — mark the cell so
+                    // saveToJSON() uses this value directly (no iframe present to scrape)
+                    isinCell.dataset.gettexStatus = entry.status;
+                    isinCell.dataset.fromJson = '1';
+
+                    // Render the known status as plain text - no iframe needed
+                    appendGettexStatusText(isinCell, entry.isin, entry.status);
+
+                    // Also update the allSignals object for sorting
+                    const sig = allSignals.find(s => s.symbol === symbol);
+                    if (sig) {
+                        sig.isin = entry.isin;
+                        sig.gettexStatus = entry.status;
+                        sig.gettexKnown = true;
+                    }
+
+                    updatedCount++;
+                });
+
+                if (updatedCount > 0) {
+                    log('success', `✅ Applied stored data to ${updatedCount} rows`);
+                    // Re-sort to reflect ISIN changes
+                    sortTable(sortColumn);
+                } else {
+                    log('debug', 'No rows needed updating from stored data');
+                }
+            })
+            .catch(err => {
+                log('error', 'Failed to load stored data:', err);
+            });
+    }
+
+    // ─── Save to JSON ────────────────────────────────────────────────────────
+
+    function saveToJSON() {
+        const btn = document.getElementById('saveBtn');
+        btn.disabled = true;
+        btn.textContent = '⏳ Saving...';
+        setStatus('scanning', 'Collecting data from rows with ISIN...');
+
+        const rows = document.querySelectorAll('#signalBody tr');
+        const dataToSave = [];
+
+        rows.forEach(row => {
+            const symbol = row.dataset.symbol;
+            if (!symbol) return;
+
+            // Check if ISIN is already known (valid format)
+            const isinCell = row.querySelector('td:last-child');
+            const isinLink = isinCell ? isinCell.querySelector('.isin-link') : null;
+            if (!isinLink) return;
+            const linkText = isinLink.textContent.trim();
+            // ISIN pattern: two letters + 10 alphanumeric
+            if (!/^[A-Z]{2}[A-Z0-9]{10}$/.test(linkText)) return;
+            const isin = linkText;
+
+            // Find the iframe inside the same cell
+            const iframe = isinCell.querySelector('.market-badge-iframe');
+            let gettexStatus = '';
+            if (iframe) {
+                try {
+                    const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+                    if (iframeDoc) {
+                        // PRIMARY: get the badge element directly
+                        const badgeElement = iframeDoc.querySelector('.gettex-badge');
+                        if (badgeElement) {
+                            gettexStatus = badgeElement.textContent.trim();
+                        } else {
+                            // FALLBACK: remove scripts and get body text
+                            const bodyClone = iframeDoc.body.cloneNode(true);
+                            bodyClone.querySelectorAll('script, style, link').forEach(el => el.remove());
+                            gettexStatus = bodyClone.textContent.trim();
+                        }
+                    }
+                } catch (e) {
+                    log('error', 'Could not read iframe content for ' + symbol, e);
+                }
+            } else {
+                // No iframe (JSON-restored row) - read the status text wrapper directly
+                const textWrapper = isinCell.querySelector('.market-badge-wrapper');
+                if (textWrapper) {
+                    const text = textWrapper.textContent.trim();
+                    gettexStatus = (text && text !== '—') ? text : '';
+                }
+            }
+
+            dataToSave.push({
+                symbol: symbol,
+                isin: isin,
+                gettex_status: gettexStatus || ''
+            });
+        });
+
+        if (dataToSave.length === 0) {
+            setStatus('error', 'No rows with valid ISIN found to save.');
+            btn.disabled = false;
+            btn.textContent = '💾 Save to JSON';
+            return;
+        }
+
+        log('info', 'Saving ' + dataToSave.length + ' entries to JSON');
+
+        fetch('?save_json=1', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: 'save_json=1&data=' + encodeURIComponent(JSON.stringify(dataToSave))
+        })
+        .then(res => res.json())
+        .then(result => {
+            if (result.success) {
+                const skipped = dataToSave.length - result.added;
+                setStatus('done', '✅ Added ' + result.added + ' new (' + skipped + ' already existed) — ' + result.count + ' total in stockscreener.json');
+                log('success', 'Saved to JSON: +' + result.added + ' new, ' + result.count + ' total');
+            } else {
+                setStatus('error', '❌ Save failed: ' + (result.error || 'Unknown error'));
+                log('error', 'Save failed', result);
+            }
+        })
+        .catch(err => {
+            setStatus('error', '❌ Network error while saving');
+            log('error', 'Network error', err);
+        })
+        .finally(() => {
+            btn.disabled = false;
+            btn.textContent = '💾 Save to JSON';
+        });
+    }
+
     // ─── Start Scan ──────────────────────────────────────────────────────────
 
     function startScan() {
@@ -1411,6 +1673,9 @@ header('Content-Type: text/html; charset=utf-8');
             }
 
             document.getElementById('progressCount').textContent = '100%';
+
+            // ─── 🔁 Auto‑apply stored data ──────────────────────────────────
+            applyStoredData();
         });
 
         eventSource.addEventListener('error', function(e) {
@@ -1515,8 +1780,18 @@ header('Content-Type: text/html; charset=utf-8');
         const bandClass = sig.band ? 'band-' + sig.band.toLowerCase() : '';
 
         let isinHtml = '';
-        if (sig.isin) {
-            // ISIN already known – show clickable ISIN and clickable badge wrapper
+        if (sig.isin && sig.gettexKnown) {
+            // Restored from stockscreener.json - status already known, NO iframe
+            const escapedIsin = sig.isin;
+            const statusText = (sig.gettexStatus && sig.gettexStatus.trim()) ? sig.gettexStatus.trim() : '—';
+            isinHtml = `
+                <span class="isin-link" style="color:#3fb950;border-color:#3fb950;">${escapedIsin}</span>
+                <div class="market-badge-wrapper" style="cursor:pointer; display:block; margin-top:4px; font-size:11px; padding:2px 6px; border-radius:4px; background:#21262d; color:#8b949e; border:1px solid #30363d;"
+                     title="Click to check on xchangemarketcheck_gettex"
+                     onclick="window.open('xchangemarketcheck_gettex.php?q=' + encodeURIComponent('${escapedIsin}'), '_blank')">${statusText}</div>
+            `;
+        } else if (sig.isin) {
+            // ISIN known live (fresh lookup) – show clickable ISIN and live iframe badge
             const escapedIsin = sig.isin;
             isinHtml = `
                 <span class="isin-link" style="color:#3fb950;border-color:#3fb950;">${escapedIsin}</span>
