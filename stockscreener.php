@@ -63,25 +63,34 @@ if (isset($_POST['save_json']) && $_POST['save_json'] === '1') {
         if (!is_array($existing)) $existing = [];
     }
 
-    // Build a lookup of symbols already present, then only append new ones
-    $existingSymbols = [];
-    foreach ($existing as $e) {
+    // Build a lookup of symbols already present, so we can update them
+    // in place (e.g. a changed comment) instead of only appending new ones.
+    $existingIndexBySymbol = [];
+    foreach ($existing as $idx => $e) {
         if (!empty($e['symbol'])) {
-            $existingSymbols[$e['symbol']] = true;
+            $existingIndexBySymbol[$e['symbol']] = $idx;
         }
     }
 
     $added = 0;
+    $updated = 0;
     foreach ($data as $entry) {
         if (empty($entry['symbol'])) continue;
-        if (isset($existingSymbols[$entry['symbol']])) continue; // skip, already present
-        $existing[] = $entry;
-        $existingSymbols[$entry['symbol']] = true;
-        $added++;
+        if (isset($existingIndexBySymbol[$entry['symbol']])) {
+            // Symbol already present — merge in any changed fields
+            // (isin, gettex_status, comment, etc.) rather than skipping it.
+            $idx = $existingIndexBySymbol[$entry['symbol']];
+            $existing[$idx] = array_merge($existing[$idx], $entry);
+            $updated++;
+        } else {
+            $existing[] = $entry;
+            $existingIndexBySymbol[$entry['symbol']] = count($existing) - 1;
+            $added++;
+        }
     }
 
     if (file_put_contents($jsonFile, json_encode($existing, JSON_PRETTY_PRINT))) {
-        echo json_encode(['success' => true, 'count' => count($existing), 'added' => $added]);
+        echo json_encode(['success' => true, 'count' => count($existing), 'added' => $added, 'updated' => $updated]);
     } else {
         echo json_encode(['error' => 'Failed to write file']);
     }
@@ -92,7 +101,7 @@ if (isset($_POST['save_json']) && $_POST['save_json'] === '1') {
 
 $MIN_AVG_VOLUME = 70000;
 $MIN_PRICE = 0.50;
-$MAX_PRICE = 0.80;
+$MAX_PRICE = 5.00;
 $MIN_PCT_CHANGE = 3.0;
 
 $LOOKBACK_DAYS = 20;
@@ -729,6 +738,33 @@ header('Content-Type: text/html; charset=utf-8');
             cursor: pointer;
             text-decoration: underline;
         }
+        .comment-input {
+            width: 140px;
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 4px;
+            color: #c9d1d9;
+            font-size: 11px;
+            padding: 4px 6px;
+            text-align: left;
+        }
+        .comment-input:focus {
+            outline: none;
+            border-color: #58a6ff;
+        }
+        .comment-input.saved-flash {
+            border-color: #3fb950;
+        }
+        tr.reversesplit-row td {
+            text-decoration: line-through;
+            text-decoration-color: #f85149;
+            opacity: 0.55;
+        }
+        tr.reversesplit-row .comment-input {
+            text-decoration: line-through;
+            text-decoration-color: #f85149;
+            opacity: 1;
+        }
         table { border-collapse: collapse; width: 100%; font-size: 13px; background: #161b22; border: 1px solid #30363d; border-radius: 8px; overflow: hidden; }
         th { 
             background: #21262d; 
@@ -1005,6 +1041,7 @@ header('Content-Type: text/html; charset=utf-8');
                     <th data-col="mom3d" data-type="number" onclick="sortTable('mom3d')">3d Mom<span class="arrow"></span></th>
                     <th data-col="band" data-type="string" onclick="sortTable('band')">Band<span class="arrow"></span></th>
                     <th data-col="isin" data-type="string" onclick="sortTable('isin')">ISIN<span class="arrow"></span></th>
+                    <th data-col="comment" data-type="string" onclick="sortTable('comment')">Comment<span class="arrow"></span></th>
                 </tr>
             </thead>
             <tbody id="signalBody">
@@ -1108,7 +1145,7 @@ header('Content-Type: text/html; charset=utf-8');
         log('info', 'symbol:', symbol);
         log('info', 'companyName provided:', companyName || '(null)');
 
-        const isinCell = rowElement.querySelector('td:last-child');
+        const isinCell = rowElement.querySelector('td[data-cell="isin"]');
         const link = isinCell.querySelector('.isin-link');
         if (!link) {
             log('error', 'ERROR: link element not found!');
@@ -1324,7 +1361,7 @@ header('Content-Type: text/html; charset=utf-8');
         
         const rows = document.querySelectorAll(`#signalBody tr[data-symbol="${symbol}"]`);
         rows.forEach(row => {
-            const isinCell = row.querySelector('td:last-child');
+            const isinCell = row.querySelector('td[data-cell="isin"]');
             const link = isinCell.querySelector('.isin-link');
             if (link) {
                 link.textContent = isin;
@@ -1393,6 +1430,23 @@ header('Content-Type: text/html; charset=utf-8');
         containerElement.appendChild(wrapper);
     }
 
+    // ─── Comment handling ────────────────────────────────────────────────────
+
+    function applyReversesplitRowState(row, commentText) {
+        const isReverseSplit = !!(commentText && commentText.toLowerCase().includes('reversesplit'));
+        row.classList.toggle('reversesplit-row', isReverseSplit);
+        return isReverseSplit;
+    }
+
+    function handleCommentInput(symbol, inputEl) {
+        const value = inputEl.value;
+        const sig = allSignals.find(s => s.symbol === symbol);
+        if (sig) sig.comment = value;
+
+        const row = inputEl.closest('tr');
+        if (row) applyReversesplitRowState(row, value);
+    }
+
     // ─── Apply stored data from JSON (auto-restore) ──────────────────────
 
     function applyStoredData() {
@@ -1404,13 +1458,14 @@ header('Content-Type: text/html; charset=utf-8');
                     log('debug', 'No stored data found or empty JSON');
                     return;
                 }
-                // Build map symbol -> {isin, status}
+                // Build map symbol -> {isin, status, comment}
                 const map = {};
                 data.forEach(item => {
                     if (item.symbol && item.isin) {
                         map[item.symbol] = {
                             isin: item.isin,
-                            status: item.gettex_status || ''
+                            status: item.gettex_status || '',
+                            comment: item.comment || ''
                         };
                     }
                 });
@@ -1423,7 +1478,16 @@ header('Content-Type: text/html; charset=utf-8');
                     const entry = map[symbol];
                     if (!entry) return;
 
-                    const isinCell = row.querySelector('td:last-child');
+                    // ── Restore comment (independent of ISIN lookup state) ──
+                    const commentInput = row.querySelector('.comment-input');
+                    if (commentInput && entry.comment) {
+                        commentInput.value = entry.comment;
+                        const sig = allSignals.find(s => s.symbol === symbol);
+                        if (sig) sig.comment = entry.comment;
+                        applyReversesplitRowState(row, entry.comment);
+                    }
+
+                    const isinCell = row.querySelector('td[data-cell="isin"]');
                     if (!isinCell) return;
 
                     // Check if already has an ISIN (manual lookup already done)
@@ -1432,6 +1496,7 @@ header('Content-Type: text/html; charset=utf-8');
                         const text = existingLink.textContent.trim();
                         if (/^[A-Z]{2}[A-Z0-9]{10}$/.test(text)) {
                             // Already has ISIN, skip to preserve manual selection
+                            updatedCount++;
                             return;
                         }
                         // It's a lookup link – we'll replace it
@@ -1469,7 +1534,7 @@ header('Content-Type: text/html; charset=utf-8');
 
                 if (updatedCount > 0) {
                     log('success', `✅ Applied stored data to ${updatedCount} rows`);
-                    // Re-sort to reflect ISIN changes
+                    // Re-sort to reflect ISIN/comment changes
                     sortTable(sortColumn);
                 } else {
                     log('debug', 'No rows needed updating from stored data');
@@ -1496,7 +1561,7 @@ header('Content-Type: text/html; charset=utf-8');
             if (!symbol) return;
 
             // Check if ISIN is already known (valid format)
-            const isinCell = row.querySelector('td:last-child');
+            const isinCell = row.querySelector('td[data-cell="isin"]');
             const isinLink = isinCell ? isinCell.querySelector('.isin-link') : null;
             if (!isinLink) return;
             const linkText = isinLink.textContent.trim();
@@ -1534,10 +1599,15 @@ header('Content-Type: text/html; charset=utf-8');
                 }
             }
 
+            // Comment is only saved when the row has a valid ISIN (see above 'if (!isinLink) return;')
+            const commentInput = row.querySelector('.comment-input');
+            const comment = commentInput ? commentInput.value.trim() : '';
+
             dataToSave.push({
                 symbol: symbol,
                 isin: isin,
-                gettex_status: gettexStatus || ''
+                gettex_status: gettexStatus || '',
+                comment: comment
             });
         });
 
@@ -1558,9 +1628,9 @@ header('Content-Type: text/html; charset=utf-8');
         .then(res => res.json())
         .then(result => {
             if (result.success) {
-                const skipped = dataToSave.length - result.added;
-                setStatus('done', '✅ Added ' + result.added + ' new (' + skipped + ' already existed) — ' + result.count + ' total in stockscreener.json');
-                log('success', 'Saved to JSON: +' + result.added + ' new, ' + result.count + ' total');
+                const updated = result.updated || 0;
+                setStatus('done', '✅ Added ' + result.added + ' new, updated ' + updated + ' — ' + result.count + ' total in stockscreener.json');
+                log('success', 'Saved to JSON: +' + result.added + ' new, ' + updated + ' updated, ' + result.count + ' total');
             } else {
                 setStatus('error', '❌ Save failed: ' + (result.error || 'Unknown error'));
                 log('error', 'Save failed', result);
@@ -1812,6 +1882,9 @@ header('Content-Type: text/html; charset=utf-8');
             isinHtml = `<span class="isin-link" onclick="lookupISIN('${sig.symbol}', '${escapedCompany}', this.closest('tr'))">🔍 Lookup ISIN</span>`;
         }
 
+        const commentValue = sig.comment || '';
+        const commentHtml = `<input type="text" class="comment-input" placeholder="Add note..." value="${escapeHtml(commentValue)}" oninput="handleCommentInput('${sig.symbol}', this)">`;
+
         const display = (currentFilter === 'all' || sig.source === currentFilter) ? '' : 'style="display:none;"';
 
         const tr = document.createElement('tr');
@@ -1848,8 +1921,12 @@ header('Content-Type: text/html; charset=utf-8');
             <td class="${rsiClass}">${sig.rsi}</td>
             <td class="${sig.mom3d >= 0 ? 'mom-pos' : 'mom-neg'}">${sig.mom3d > 0 ? '+' : ''}${sig.mom3d}%</td>
             <td>${sig.band ? `<span class="band-badge ${bandClass}">${sig.band}</span>` : ''}</td>
-            <td>${isinHtml}</td>
+            <td data-cell="isin">${isinHtml}</td>
+            <td data-cell="comment">${commentHtml}</td>
         `;
+
+        // Apply strikethrough state on initial render if the restored comment already flags a reverse split
+        applyReversesplitRowState(tr, commentValue);
 
         return tr;
     }
