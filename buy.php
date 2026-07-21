@@ -43,18 +43,18 @@ if ($stockIndex === null && !empty($symbol)) {
 
 $currentIsin = '';
 $currentNrbght = '';
-$currentDepot = 'comdirect'; // Default value
+$currentDepot = 'scalablecapital'; // Default value
 
 if ($stockIndex !== null) {
     $currentIsin = $stocks[$stockIndex]['isin'] ?? '';
     $currentNrbght = $stocks[$stockIndex]['nrbght'] ?? '';
-    $currentDepot = $stocks[$stockIndex]['depot'] ?? 'comdirect';
+    $currentDepot = $stocks[$stockIndex]['depot'] ?? 'scalablecapital';
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $stockIndex !== null) {
     $isin = isset($_POST['isin']) ? strtoupper(trim($_POST['isin'])) : '';
     $nrbght = isset($_POST['nrbght']) ? trim($_POST['nrbght']) : '';
-    $depot = isset($_POST['depot']) ? trim($_POST['depot']) : 'comdirect';
+    $depot = isset($_POST['depot']) ? trim($_POST['depot']) : 'scalablecapital';
     
     $errors = [];
     
@@ -70,7 +70,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $stockIndex !== null) {
         $errors[] = 'Number bought must be a positive whole number.';
     }
     
-    if (!in_array($depot, ['ingdiba', 'comdirect'])) {
+    if (!in_array($depot, ['scalablecapital', 'ingdiba', 'comdirect'])) {
         $errors[] = 'Invalid depot selection.';
     }
     
@@ -402,8 +402,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $stockIndex !== null) {
                     <div class="form-group">
                         <label>Depot <span class="required">*</span></label>
                         <select name="depot" required>
+                            <option value="scalablecapital" <?php echo $currentDepot === 'scalablecapital' ? 'selected' : ''; ?>>scalablecapital</option>
                             <option value="comdirect" <?php echo $currentDepot === 'comdirect' ? 'selected' : ''; ?>>comdirect</option>
                             <option value="ingdiba" <?php echo $currentDepot === 'ingdiba' ? 'selected' : ''; ?>>ING DiBa</option>
+                            <option value="traderepublic" <?php echo $currentDepot === 'traderepublic' ? 'selected' : ''; ?>>TradeRepublic</option>
                         </select>
                         <div class="help-text">Select the depot/broker where this stock is held</div>
                     </div>
